@@ -96,6 +96,8 @@ class SimulationService:
             state["results"]["extent_path"] = extent_path
             state["results"]["depth_path"] = depth_path
             state["results"]["arrival_path"] = arrival_path
+            state["results"]["max_depth_m"] = result.max_simulated_depth_m
+            state["results"]["max_velocity_mps"] = result.max_simulated_velocity_mps
             
             # --- IMPACT ANALYSIS STAGE ---
             state["current_stage"] = "IMPACT_ANALYSIS"

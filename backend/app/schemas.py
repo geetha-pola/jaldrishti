@@ -49,3 +49,5 @@ class SimulationResultsResponse(BaseModel):
     arrival_path: Optional[str] = None
     impact_summary_path: Optional[str] = None
     satellite_validation_path: Optional[str] = None
+    max_depth_m: Optional[float] = None
+    max_velocity_mps: Optional[float] = None
