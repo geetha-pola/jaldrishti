@@ -1,8 +1,7 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql://postgres:postgres@localhost:5432/jaldrishti"
+    database_url: str
     host: str = "0.0.0.0"
     port: int = 8000
 

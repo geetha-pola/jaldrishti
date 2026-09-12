@@ -1,0 +1,33 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# JALDRISHTI Runtime Data
+backend/data/domain/*.tif
+backend/data/domain/*.json
+backend/data/hydro_results/
+backend/data/impact_results/
+backend/data/satellite_results/
+backend/data/simulations/
+backend/test.shp
+backend/test.shx
+backend/test.dbf
+backend/test.prj
+backend/test.cpg
+backend/test.kml
+backend/temp/
+backend/logs/
+
+# IDEs
+.vscode/
+.idea/

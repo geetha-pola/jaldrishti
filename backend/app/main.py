@@ -30,7 +30,11 @@ app.add_middleware(
 )
 
 @app.get("/health")
-def health_check(db: Session = Depends(get_db)):
+def health_check():
+    return {"status": "alive"}
+
+@app.get("/ready")
+def readiness_check(db: Session = Depends(get_db)):
     db_status = "unknown"
     postgis_status = "unknown"
     try:
@@ -38,11 +42,12 @@ def health_check(db: Session = Depends(get_db)):
         db_status = "connected"
         postgis_status = result if result else "not installed"
     except Exception as e:
-        db_status = f"failed: {str(e)}"
+        logger.error(f"Readiness check DB error: {e}")
+        db_status = "failed"
         postgis_status = "unknown"
 
     return {
-        "status": "healthy" if db_status == "connected" else "degraded",
+        "status": "ready" if db_status == "connected" else "unavailable",
         "database": db_status,
         "postgis_version": postgis_status
     }

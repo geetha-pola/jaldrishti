@@ -1,5 +1,4 @@
-import pytest
-from app.main import health_check, get_dams, get_dam
+from app.main import health_check, readiness_check, get_dams, get_dam
 from fastapi import HTTPException
 import json
 
@@ -34,20 +33,24 @@ class DummyDamSession:
         return QueryChain()
 
 def test_read_health():
-    # Test DB failure case
+    # Test Liveness
+    response_alive = health_check()
+    assert response_alive["status"] == "alive"
+
+    # Test Readiness DB failure case
     class FailSession:
         def execute(self, query):
             raise Exception("No DB connection")
 
-    response_fail = health_check(FailSession())
-    assert response_fail["status"] == "degraded"
-    assert "failed" in response_fail["database"]
+    response_fail = readiness_check(FailSession())
+    assert response_fail["status"] == "unavailable"
+    assert response_fail["database"] == "failed"
 
-    # Test DB success case
-    response_success = health_check(DummySession())
-    assert response_success["status"] == "healthy"
+    # Test Readiness DB success case
+    response_success = readiness_check(DummySession())
+    assert response_success["status"] == "ready"
     assert response_success["postgis_version"] == "3.3.0"
-    print("Health check tests passed!")
+    print("Health and readiness check tests passed!")
 
 def test_get_dams():
     # Test router logic with mocked DB

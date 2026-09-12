@@ -1,4 +1,9 @@
+import os
 import pytest
+
+# Ensure tests don't crash due to missing DATABASE_URL
+os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/jaldrishti")
+
 from sqlalchemy import text
 from app.database import engine
 
