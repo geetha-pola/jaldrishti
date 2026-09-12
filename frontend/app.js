@@ -193,9 +193,31 @@ async function fetchResults(simId) {
         
         // GeoJSON Map
         initLeafletMap(simId);
+        fetchExports(simId);
         
     } catch (e) {
         console.error("Failed fetching results", e);
+    }
+}
+
+async function fetchExports(simId) {
+    try {
+        const resp = await fetch(`${API_BASE_URL}/simulations/${simId}/exports`);
+        if (resp.ok) {
+            const data = await resp.json();
+            const container = document.getElementById('export-container');
+            container.innerHTML = '';
+            const baseOrigin = API_BASE_URL.replace('/api/v1', '');
+            data.exports.forEach(exp => {
+                container.innerHTML += `<div class="export-card">
+                    <b>${exp.format.toUpperCase()}</b>
+                    <span>${exp.name}</span>
+                    <button onclick="window.open('${baseOrigin}${exp.url}', '_blank')">Export</button>
+                </div>`;
+            });
+        }
+    } catch (e) {
+        console.error('Failed fetching exports', e);
     }
 }
 

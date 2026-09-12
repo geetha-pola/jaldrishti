@@ -196,3 +196,102 @@ def get_simulation_satellite(sim_id: str):
         raise HTTPException(status_code=404, detail="Satellite validation not found")
     return FileResponse(path, media_type="application/json")
 
+
+from app.exports import export_to_shapefile_zip, export_to_kml, export_impact_csv, export_full_package, generate_summary_json
+
+@app.get('/api/v1/simulations/{sim_id}/exports')
+def get_exports_metadata(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED':
+        raise HTTPException(status_code=404, detail='Simulation not found or not completed')
+    
+    base_url = f'/api/v1/simulations/{sim_id}/export'
+    return {
+        'simulation_id': sim_id,
+        'exports': [
+            {'name': 'Flood Extent GeoJSON', 'format': 'geojson', 'url': f'{base_url}/extent/geojson'},
+            {'name': 'Flood Extent Shapefile', 'format': 'shp', 'url': f'{base_url}/extent/shp'},
+            {'name': 'Flood Extent KML', 'format': 'kml', 'url': f'{base_url}/extent/kml'},
+            {'name': 'Flood Depth GeoTIFF', 'format': 'geotiff', 'url': f'{base_url}/depth/geotiff'},
+            {'name': 'Arrival Time GeoTIFF', 'format': 'geotiff', 'url': f'{base_url}/arrival/geotiff'},
+            {'name': 'Affected Places CSV', 'format': 'csv', 'url': f'{base_url}/impact/csv'},
+            {'name': 'Impact Summary JSON', 'format': 'json', 'url': f'{base_url}/impact/json'},
+            {'name': 'Simulation Summary JSON', 'format': 'json', 'url': f'{base_url}/summary/json'},
+            {'name': 'Complete Result Package', 'format': 'zip', 'url': f'{base_url}/package'}
+        ]
+    }
+
+@app.get('/api/v1/simulations/{sim_id}/export/extent/geojson')
+def export_extent_geojson(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('extent_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    return FileResponse(path, media_type='application/geo+json', filename=f'JALDRISHTI_{sim_id}_extent.geojson')
+
+@app.get('/api/v1/simulations/{sim_id}/export/extent/shp')
+def export_extent_shp(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('extent_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    zip_path = export_to_shapefile_zip(path, sim_id)
+    return FileResponse(zip_path, media_type='application/zip', filename=f'JALDRISHTI_{sim_id}_shapefile.zip')
+
+@app.get('/api/v1/simulations/{sim_id}/export/extent/kml')
+def export_extent_kml(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('extent_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    kml_path = export_to_kml(path, sim_id)
+    return FileResponse(kml_path, media_type='application/vnd.google-earth.kml+xml', filename=f'JALDRISHTI_{sim_id}_extent.kml')
+
+@app.get('/api/v1/simulations/{sim_id}/export/depth/geotiff')
+def export_depth_geotiff(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('depth_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    return FileResponse(path, media_type='image/tiff', filename=f'JALDRISHTI_{sim_id}_depth.tif')
+
+@app.get('/api/v1/simulations/{sim_id}/export/arrival/geotiff')
+def export_arrival_geotiff(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('arrival_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    return FileResponse(path, media_type='image/tiff', filename=f'JALDRISHTI_{sim_id}_arrival.tif')
+
+@app.get('/api/v1/simulations/{sim_id}/export/impact/csv')
+def export_impact_csv_ep(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('impact_summary_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    csv_path = export_impact_csv(path, sim_id)
+    return FileResponse(csv_path, media_type='text/csv', filename=f'JALDRISHTI_{sim_id}_impact.csv')
+
+@app.get('/api/v1/simulations/{sim_id}/export/impact/json')
+def export_impact_json(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    path = state.get('results', {}).get('impact_summary_path')
+    if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
+    return FileResponse(path, media_type='application/json', filename=f'JALDRISHTI_{sim_id}_impact.json')
+
+@app.get('/api/v1/simulations/{sim_id}/export/summary/json')
+def export_summary_json(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    impact_path = state.get('results', {}).get('impact_summary_path')
+    sat_path = state.get('results', {}).get('satellite_validation_path')
+    summary_path = generate_summary_json(state, impact_path, sat_path)
+    return FileResponse(summary_path, media_type='application/json', filename=f'JALDRISHTI_{sim_id}_summary.json')
+
+@app.get('/api/v1/simulations/{sim_id}/export/package')
+def export_package(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
+    pkg_path = export_full_package(state)
+    return FileResponse(pkg_path, media_type='application/zip', filename=f'JALDRISHTI_{sim_id}.zip')
