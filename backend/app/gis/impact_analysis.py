@@ -229,6 +229,8 @@ class ImpactAnalyzer:
             "generated_at": datetime.utcnow().isoformat(),
             "provenance": "Overpass API (OSM) spatial intersection with hydrodynamic results.",
             "limitations": [
+                "BASELINE SOLVER: This uses a simplified 2D Diffusive Wave approximation, not full SWE.",
+                "NUMERICAL VELOCITY CAP: The maximum velocity is artificially capped at 30 m/s for numerical stability, NOT as a scientifically validated physical Froude limit.",
                 "EXTREME HYPOTHETICAL ASSUMPTION: The flood extent represents an engineer-defined stress test, NOT a physically validated real-world event prediction.",
                 "SIMULATED ARRIVAL TIMES: Arrival times are mathematical outputs of a baseline solver and are NOT real-time operational warnings.",
                 "POTENTIAL AFFECTED FEATURES: Represents features geometrically inside the simulated flood polygon based on open OSM data. Does not claim actual future damage or exact population at risk.",

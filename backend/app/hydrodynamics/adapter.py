@@ -324,6 +324,7 @@ class BaselineHydrodynamicAdapter:
             
         limitations = [
             "BASELINE SOLVER: This uses a simplified 2D Diffusive Wave approximation, not full SWE.",
+            "NUMERICAL VELOCITY CAP: The maximum velocity is artificially capped at 30 m/s for numerical stability, NOT as a scientifically validated physical Froude limit.",
             "SPH/Delft3D ABSTRACTION: This baseline executes behind the Model Adapter as SPH/Delft3D binaries are unsupported in this environment.",
             "COARSE GRID: The DEM was resampled to ~300m to allow fast execution.",
             "EXTREME HYPOTHETICAL ASSUMPTION: The flood extent represents an engineer-defined stress test, NOT a physically validated real-world event prediction."

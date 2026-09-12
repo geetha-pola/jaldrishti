@@ -72,10 +72,35 @@ def test_flood_extent_not_offshore():
     latest = max(geojsons, key=os.path.getctime)
     gdf = gpd.read_file(latest)
     
-    # 6. Flood extent is not accidentally generated offshore (the Arabian Sea bug was at ~ 9.0 N, 76.1 E)
+        # 6. Flood extent is not accidentally generated offshore (the Arabian Sea bug was at ~ 9.0 N, 76.1 E)
     if not gdf.empty:
         minx, miny, maxx, maxy = gdf.total_bounds
         # The correct flood extent should be near Idukki (9.8 N, 76.9 E)
         # It shouldn't be south of 9.3 N or west of 76.2 E
         assert miny > 9.3, f"Flood extent reached {miny} N, which is offshore/south!"
         assert minx > 76.2, f"Flood extent reached {minx} E, which is offshore/west!"
+        
+def test_area_and_units_regression():
+    import glob
+    import json
+    
+    # 1. Check impact summary JSON keys for strict area units (km2)
+    summaries = glob.glob("data/impact_results/*_impact_summary.json")
+    if not summaries:
+        pytest.skip("No impact summaries found.")
+        
+    latest_summary = max(summaries, key=os.path.getctime)
+    with open(latest_summary, 'r') as f:
+        impact = json.load(f)
+        
+    assert "flooded_area_km2" in impact, "Area key must explicitly include km2 unit!"
+    assert impact["flooded_area_km2"] < 1000.0, "Flooded area is impossibly large (likely wrong unit)"
+    
+    # 2. Check limitation labels for scientific honesty
+    limitations = impact.get("limitations", [])
+    
+    # Verify the velocity limit is described as a modeling cap
+    assert any("NUMERICAL VELOCITY CAP" in l for l in limitations)
+    assert any("NOT as a scientifically validated physical Froude limit" in l for l in limitations)
+    assert any("BASELINE SOLVER" in l for l in limitations)
+    assert any("EXTREME HYPOTHETICAL ASSUMPTION" in l for l in limitations)
