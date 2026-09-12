@@ -259,7 +259,8 @@ class BaselineHydrodynamicAdapter:
         utm_x, utm_y = transformer.transform(source_x, source_y)
         
         # Convert UTM to pixel index
-        row, col = ~res_transform * (utm_x, utm_y)
+        # Inverse transform maps (x, y) -> (col, row)
+        col, row = ~res_transform * (utm_x, utm_y)
         inflow_idx_y = min(max(int(row), 0), dem_data.shape[0]-1)
         inflow_idx_x = min(max(int(col), 0), dem_data.shape[1]-1)
         

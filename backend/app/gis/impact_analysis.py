@@ -173,8 +173,8 @@ class ImpactAnalyzer:
                 continue
                 
             # 2. Spatial Overlay (Intersection with flood extent)
-            # Use 'intersection' to get the actual clipped geometries (e.g. for roads)
-            affected = gpd.overlay(gdf, self.extent_gdf, how='intersection')
+            # Use 'clip' instead of 'overlay' to handle mixed geometries like points and lines in the same gdf
+            affected = gpd.clip(gdf, self.extent_gdf)
             
             if affected.empty:
                 impacts[name] = {"count": 0, "affected_length_km": 0.0, "mean_depth_m": None, "max_depth_m": None, "earliest_arrival_time_s": None}
