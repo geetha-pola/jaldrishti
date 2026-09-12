@@ -100,8 +100,11 @@ class ScenarioGenerator:
         
         scenario_id = f"SCEN-{dam_name[:3].upper()}-{uuid.uuid4().hex[:6]}"
         
+        scenario_name = "Extreme Hypothetical Stress-Test Scenario"
+        
         return StandardizedModelInput(
             scenario_id=scenario_id,
+            scenario_name=scenario_name,
             hazard_type="DAM_BREAK",
             scenario_type=ScenarioType.HYPOTHETICAL,
             source_location={"lat": lat, "lon": lon},

@@ -48,6 +48,7 @@ def test_idukki_scenario():
     )
     
     print(f"\nScenario ID: {scenario.scenario_id}")
+    print(f"Scenario Name: {scenario.scenario_name}")
     print(f"Type: {scenario.scenario_type}")
     print(f"Peak Discharge (cms): {max([p.discharge_cms for p in scenario.inflow_hydrograph])}")
     

@@ -44,6 +44,7 @@ class StandardizedModelInput(BaseModel):
     Contains no solver-specific logic.
     """
     scenario_id: str
+    scenario_name: str
     hazard_type: str
     scenario_type: ScenarioType
     source_location: Dict[str, float]  # {'lat': x, 'lon': y}
