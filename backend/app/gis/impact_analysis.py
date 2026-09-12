@@ -50,6 +50,8 @@ class ImpactAnalyzer:
           way["bridge"="yes"]({bbox});
           way["building"]({bbox});
           node["place"]({bbox});
+          way["place"]({bbox});
+          way["landuse"="residential"]({bbox});
           node["amenity"="school"]({bbox});
           node["amenity"="hospital"]({bbox});
         );
@@ -73,7 +75,7 @@ class ImpactAnalyzer:
         roads = []
         bridges = []
         buildings = []
-        settlements = []
+        places = []
         schools = []
         hospitals = []
         
@@ -110,7 +112,10 @@ class ImpactAnalyzer:
                 
             if "place" in tags:
                 props["type"] = tags["place"]
-                settlements.append({"geometry": geom, **props})
+                places.append({"geometry": geom, **props})
+            elif tags.get("landuse") == "residential":
+                props["type"] = "residential"
+                places.append({"geometry": geom, **props})
                 
             if tags.get("amenity") == "school":
                 schools.append({"geometry": geom, **props})
@@ -120,15 +125,17 @@ class ImpactAnalyzer:
                 
         def make_gdf(features):
             if not features:
-                return gpd.GeoDataFrame(columns=["geometry", "osm_id", "name"], crs="EPSG:4326").to_crs(self.crs)
+                return gpd.GeoDataFrame(columns=["geometry", "osm_id", "name", "type"], crs="EPSG:4326").to_crs(self.crs)
             gdf = gpd.GeoDataFrame(features, crs="EPSG:4326")
+            if "type" not in gdf.columns:
+                gdf["type"] = "Unknown"
             return gdf.to_crs(self.crs)
             
         return {
             "roads": make_gdf(roads),
             "bridges": make_gdf(bridges),
             "buildings": make_gdf(buildings),
-            "settlements": make_gdf(settlements),
+            "places": make_gdf(places),
             "schools": make_gdf(schools),
             "hospitals": make_gdf(hospitals)
         }
@@ -151,6 +158,16 @@ class ImpactAnalyzer:
                     results.append(float(v))
         return results
 
+    def get_impact_level(self, arrival_minutes: float) -> str:
+        if arrival_minutes < 15:
+            return "IMMEDIATE"
+        elif arrival_minutes <= 30:
+            return "HIGH"
+        elif arrival_minutes <= 60:
+            return "MODERATE"
+        else:
+            return "LATER"
+
     def run_analysis(self, sim_id: str, scenario_id: str):
         # 1. Fetch and Parse
         osm_data = self.fetch_osm_data()
@@ -163,6 +180,17 @@ class ImpactAnalyzer:
         flooded_area_km2 = self.extent_gdf.geometry.area.sum() / 1e6
         
         print(f"Retrieved from OSM: { {k: len(v) for k, v in layers.items()} }")
+        
+        # Need source location for distance calculations
+        with open('data/domain/idukki_scenario.json', 'r') as f:
+            scenario_json = json.load(f)
+        dam_lon, dam_lat = scenario_json['source_location']['lon'], scenario_json['source_location']['lat']
+        
+        # Transform dam location to match CRS for Euclidean distance (in meters)
+        from pyproj import Transformer
+        t = Transformer.from_crs('EPSG:4326', self.crs, always_xy=True)
+        dam_x, dam_y = t.transform(dam_lon, dam_lat)
+        dam_pt = Point(dam_x, dam_y)
         
         for name, gdf in layers.items():
             if gdf.empty:
@@ -191,6 +219,9 @@ class ImpactAnalyzer:
             affected["max_depth_m"] = depths
             affected["arrival_time_s"] = arrivals
             
+            # Distance from dam
+            affected["distance_from_source_km"] = affected.geometry.centroid.distance(dam_pt) / 1000.0
+            
             # 4. Calculate Stats
             valid_depths = [d for d in depths if d is not None and d > 0]
             valid_arrivals = [a for a in arrivals if a is not None and a >= 0]
@@ -213,18 +244,46 @@ class ImpactAnalyzer:
             out_path = os.path.join(self.output_dir, f"{sim_id}_affected_{name}.geojson")
             affected.to_crs("EPSG:4326").to_file(out_path, driver="GeoJSON")
             
+        # Compile places for the primary output
+        places_list = []
+        if not affected_gdfs.get("places", gpd.GeoDataFrame()).empty:
+            places_gdf = affected_gdfs["places"]
+            # Filter to named places only
+            named_places = places_gdf[places_gdf["name"] != "Unknown"].copy()
+            
+            for _, row in named_places.iterrows():
+                arr = row.get("arrival_time_s")
+                depth = row.get("max_depth_m")
+                
+                if arr is None or arr < 0:
+                    continue
+                    
+                arr_min = float(arr) / 60.0
+                
+                places_list.append({
+                    "name": row.get("name"),
+                    "type": row.get("type", "Unknown"),
+                    "distance_from_source_km": float(row.get("distance_from_source_km", 0.0)),
+                    "flood_arrival_minutes": arr_min,
+                    "max_depth_m": float(depth) if depth else None,
+                    "impact_level": self.get_impact_level(arr_min)
+                })
+                
+            # Sort by arrival time
+            places_list.sort(key=lambda x: x["flood_arrival_minutes"])
+            
         # 5. Build Standardized Output
         summary = {
             "simulation_id": sim_id,
             "scenario_id": scenario_id,
             "flooded_area_km2": float(flooded_area_km2),
+            "places": places_list,
             "affected_infrastructure": {
-                "roads": impacts["roads"],
-                "bridges": impacts["bridges"],
-                "buildings": impacts["buildings"],
-                "settlements": impacts["settlements"],
-                "schools": impacts["schools"],
-                "hospitals": impacts["hospitals"]
+                "roads": impacts.get("roads"),
+                "bridges": impacts.get("bridges"),
+                "buildings": impacts.get("buildings"),
+                "schools": impacts.get("schools"),
+                "hospitals": impacts.get("hospitals")
             },
             "generated_at": datetime.utcnow().isoformat(),
             "provenance": "Overpass API (OSM) spatial intersection with hydrodynamic results.",
@@ -232,7 +291,7 @@ class ImpactAnalyzer:
                 "BASELINE SOLVER: This uses a simplified 2D Diffusive Wave approximation, not full SWE.",
                 "NUMERICAL VELOCITY CAP: The maximum velocity is artificially capped at 30 m/s for numerical stability, NOT as a scientifically validated physical Froude limit.",
                 "EXTREME HYPOTHETICAL ASSUMPTION: The flood extent represents an engineer-defined stress test, NOT a physically validated real-world event prediction.",
-                "SIMULATED ARRIVAL TIMES: Arrival times are mathematical outputs of a baseline solver and are NOT real-time operational warnings.",
+                "MODEL-ESTIMATED ARRIVAL TIMES: Arrival times are mathematical outputs of a baseline solver and are NOT real-time operational warnings. Never claim the flood 'WILL' reach a place.",
                 "POTENTIAL AFFECTED FEATURES: Represents features geometrically inside the simulated flood polygon based on open OSM data. Does not claim actual future damage or exact population at risk.",
                 "DEPTH SAMPLING: Depths are sampled at the centroid of affected feature geometries, which may not represent the maximum depth across large line/polygon features."
             ]

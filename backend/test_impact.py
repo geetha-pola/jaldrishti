@@ -33,16 +33,26 @@ def run():
     print("\n--- PERFORMING SPATIAL INTERSECTION WITH OSM ---")
     summary, summary_path = analyzer.run_analysis(sim_id=sim_id, scenario_id="SCEN-IDU-c2c7e4")
     
-    print("\n--- IMPACT SUMMARY ---")
-    print(f"Flooded Area: {summary['flooded_area_km2']:.2f} km2")
-    infra = summary['affected_infrastructure']
-    print(f"Affected Roads: {infra['roads']['affected_length_km']:.2f} km (Mean Depth: {infra['roads']['mean_depth_m']})")
-    print(f"Affected Bridges: {infra['bridges']['count']} (Earliest Arrival: {infra['bridges']['earliest_arrival_time_s']} s)")
-    print(f"Affected Buildings: {infra['buildings']['count']} (Max Depth: {infra['buildings']['max_depth_m']})")
-    print(f"Affected Settlements: {infra['settlements']['count']}")
-    print(f"Affected Schools: {infra['schools']['count']}")
-    print(f"Affected Hospitals: {infra['hospitals']['count']}")
+    print("\n--- FLOOD IMPACT ANALYSIS ---")
     
+    print("\nNearest affected places\n")
+    print(f"{'Place':<20} {'Type':<12} {'Distance':<12} {'Arrival':<10}")
+    print("-" * 55)
+    
+    places = summary.get('places', [])
+    for p in places[:10]:  # Show top 10
+        dist = f"{p['distance_from_source_km']:.1f} km"
+        arr = f"{int(p['flood_arrival_minutes'])} min"
+        print(f"{p['name'][:19]:<20} {p['type'].capitalize()[:11]:<12} {dist:<12} {arr:<10}")
+        
+    print("\nFLOOD ARRIVAL TIMELINE\n")
+    print("Dam")
+    for p in places[:5]:  # Timeline for top 5
+        arr = f"{int(p['flood_arrival_minutes'])} min"
+        print(" |")
+        print(" V")
+        print(f"{arr} -> {p['name']}")
+        
     print(f"\nSaved impact summary to: {summary_path}")
     
     print("\n--- SCIENTIFIC HONESTY / LIMITATIONS ---")
