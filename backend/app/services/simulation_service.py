@@ -74,11 +74,24 @@ class SimulationService:
         except ValueError as e:
             raise ValueError(f"Unsupported model type: {model_type}")
             
-        if not adapter.is_available:
-            raise ValueError(f"Model {model_type} runtime is unavailable in current environment")
-            
         db = SessionLocal()
         try:
+            if not adapter.is_available:
+                sim = Simulation(
+                    hazard_type=req.hazard_type,
+                    dam_id=req.dam_id if req.hazard_type == "DAM_BREAK" else None,
+                    lake_id=req.lake_id if req.hazard_type == "GLOF" else None,
+                    requested_model=model_type,
+                    actual_model=None,
+                    status="RUNTIME_UNAVAILABLE",
+                    current_stage="FAILED",
+                    progress=0.0,
+                    error_information=f"Runtime for {model_type} is unavailable in the current environment."
+                )
+                db.add(sim)
+                db.commit()
+                return sim.simulation_id
+                
             sim = Simulation(
                 hazard_type=req.hazard_type,
                 dam_id=req.dam_id if req.hazard_type == "DAM_BREAK" else None,

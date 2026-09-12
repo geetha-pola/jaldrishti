@@ -149,7 +149,11 @@ from app.services.simulation_service import SimulationService
 def create_simulation(req: schemas.SimulationRequest, background_tasks: BackgroundTasks):
     try:
         sim_id = SimulationService.create_simulation(req)
-        # Dispatch background task
+        state = _get_simulation_state(sim_id)
+        if state and state["status"] == "RUNTIME_UNAVAILABLE":
+            return {"simulation_id": sim_id, "status": "RUNTIME_UNAVAILABLE"}
+            
+        # Dispatch background task if queued
         background_tasks.add_task(SimulationService.run_simulation, sim_id)
         return {"simulation_id": sim_id, "status": "QUEUED"}
     except ValueError as e:
