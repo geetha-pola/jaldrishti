@@ -47,6 +47,13 @@ def health_check(db: Session = Depends(get_db)):
         "postgis_version": postgis_status
     }
 
+
+from app.hydrodynamics.adapter import ModelRegistry
+
+@app.get('/api/v1/models')
+def get_models():
+    return ModelRegistry.list_models()
+
 @app.get("/api/v1/dams", response_model=list[schemas.DamResponse])
 def get_dams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Fetch all dams with their geometries as GeoJSON"""
@@ -138,7 +145,9 @@ def get_simulation_status(sim_id: str):
         "status": state["status"],
         "current_stage": state.get("current_stage"),
         "progress": state.get("progress"),
-        "error": state.get("error")
+        "error": state.get("error"),
+        "requested_model": state.get("requested_model"),
+        "actual_model": state.get("actual_model")
     }
 
 @app.get("/api/v1/simulations/{sim_id}/results", response_model=schemas.SimulationResultsResponse)

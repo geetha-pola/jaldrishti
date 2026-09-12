@@ -1,6 +1,6 @@
 import json
 import logging
-from app.hydrodynamics import BaselineHydrodynamicAdapter
+from app.hydrodynamics import BaselineDiffusiveWaveAdapter
 
 logging.basicConfig(level=logging.INFO)
 
@@ -9,7 +9,7 @@ def run():
     scenario_path = "data/domain/idukki_scenario.json"
     
     print(f"Reading standardized model input from: {scenario_path}")
-    adapter = BaselineHydrodynamicAdapter(output_dir="data/hydro_results")
+    adapter = BaselineDiffusiveWaveAdapter(output_dir="data/hydro_results")
     
     print("\n--- EXECUTING BASELINE SOLVER (BEHIND MODEL ADAPTER) ---")
     result = adapter.execute_simulation(scenario_path)
