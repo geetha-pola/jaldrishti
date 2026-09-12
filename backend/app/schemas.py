@@ -29,6 +29,7 @@ class SimulationRequest(BaseModel):
     dam_id: str
     scenario_id: Optional[str] = None
     event_date: Optional[str] = None
+    model_type: Optional[str] = "BASELINE_DIFFUSIVE_WAVE"
 
 class SimulationResponse(BaseModel):
     simulation_id: str
@@ -40,6 +41,8 @@ class SimulationStatusResponse(BaseModel):
     current_stage: Optional[str] = None
     progress: Optional[float] = None
     error: Optional[str] = None
+    requested_model: Optional[str] = None
+    actual_model: Optional[str] = None
 
 class SimulationResultsResponse(BaseModel):
     simulation_id: str

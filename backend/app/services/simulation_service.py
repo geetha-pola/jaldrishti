@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 from app import schemas
 from app.scenarios.models import StandardizedModelInput
-from app.hydrodynamics.adapter import BaselineHydrodynamicAdapter
+from app.hydrodynamics.adapter import ModelRegistry
 from app.gis.impact_analysis import ImpactAnalyzer
 from app.satellite.validation import SatelliteValidator
 
@@ -37,9 +37,17 @@ class SimulationService:
         if req.hazard_type not in ["DAM_BREAK"]:
             raise ValueError(f"Unsupported hazard type: {req.hazard_type}")
 
-        # In a real app we'd query the DB for the dam. Here we just accept the ID.
         if not req.dam_id or req.dam_id.strip() == "":
             raise ValueError("Invalid dam ID")
+            
+        model_type = req.model_type or "BASELINE_DIFFUSIVE_WAVE"
+        try:
+            adapter = ModelRegistry.get_adapter(model_type)
+        except ValueError as e:
+            raise ValueError(f"Unsupported model type: {model_type}")
+            
+        if not adapter.is_available:
+            raise ValueError(f"Model {model_type} runtime is unavailable in current environment")
             
         sim_id = f"SIM-{uuid.uuid4().hex[:6]}"
         
@@ -50,6 +58,8 @@ class SimulationService:
             "progress": 0.0,
             "error": None,
             "request": req.dict(),
+            "requested_model": model_type,
+            "actual_model": model_type,
             "results": {}
         }
         
@@ -63,14 +73,11 @@ class SimulationService:
             return
             
         try:
-            # --- SETUP STAGE ---
             state["status"] = "RUNNING"
             state["current_stage"] = "LOADING_SCENARIO"
             state["progress"] = 10.0
             SimulationService._save_state(sim_id, state)
             
-            # For this milestone, we load the existing hypothetical scenario
-            # Normally we would generate it dynamically based on the req.dam_id
             scenario_path = 'data/domain/idukki_scenario.json'
             if not os.path.exists(scenario_path):
                 raise FileNotFoundError(f"Scenario file not found: {scenario_path}")
@@ -80,13 +87,20 @@ class SimulationService:
                 
             model_input = StandardizedModelInput(**scenario_data)
             
-            # --- HYDRODYNAMIC SIMULATION STAGE ---
             state["current_stage"] = "HYDRODYNAMIC_SIMULATION"
             state["progress"] = 30.0
             SimulationService._save_state(sim_id, state)
             
-            adapter = BaselineHydrodynamicAdapter(output_dir="data/hydro_results")
-            result = adapter.execute_simulation(scenario_path)
+            model_type = state.get("requested_model", "BASELINE_DIFFUSIVE_WAVE")
+            adapter = ModelRegistry.get_adapter(model_type)
+            if not adapter.is_available:
+                raise RuntimeError(f"Runtime for {model_type} is unavailable")
+                
+            # Allow model adapter to prepare input specific to it (e.g XML for SPH)
+            adapter.prepare_input(model_input, output_dir="data/hydro_results")
+            
+            # Execute Model
+            result = adapter.run(model_input, output_dir="data/hydro_results")
             
             # Store paths
             extent_path = result.flood_extent_geojson

@@ -247,3 +247,73 @@ function initLeafletMap(simId) {
 
 // Init
 window.addEventListener('DOMContentLoaded', loadDams);
+let selectedModelId = 'BASELINE_DIFFUSIVE_WAVE';
+
+async function fetchModels() {
+    try {
+        const resp = await fetch(API_BASE_URL + '/models');
+        if (resp.ok) {
+            const models = await resp.json();
+            const container = document.getElementById('model-selection-container');
+            container.innerHTML = '';
+            models.forEach(m => {
+                const btn = document.createElement('button');
+                btn.className = 'model';
+                if (m.id === selectedModelId) btn.classList.add('selected');
+                if (!m.is_available) {
+                    btn.classList.add('unavailable');
+                    btn.innerHTML = m.name + ' <small>Runtime unavailable</small>';
+                } else {
+                    btn.innerHTML = m.name + ' <small>Runtime available</small>';
+                }
+                
+                btn.onclick = () => {
+                    if (!m.is_available) {
+                        toast(m.name + ' runtime is missing in this environment');
+                        return;
+                    }
+                    selectedModelId = m.id;
+                    document.querySelectorAll('#model-selection-container .model').forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                };
+                container.appendChild(btn);
+            });
+        }
+    } catch (e) { console.error('Failed fetching models', e); }
+}
+
+async function startDynamicSimulation() {
+    const damSelect = document.getElementById('dam-select');
+    const damId = damSelect ? damSelect.value : '1';
+    
+    go('simulation');
+    document.getElementById('sim-status-badge').textContent = 'Queued';
+    document.getElementById('sim-status-badge').className = 'status review';
+    document.getElementById('sim-progress-text').textContent = '0%';
+    document.getElementById('sim-progress-bar').style.width = '0%';
+    document.getElementById('btn-open-results').disabled = true;
+    
+    try {
+        const resp = await fetch(API_BASE_URL + '/simulations', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                hazard_type: 'DAM_BREAK',
+                dam_id: damId,
+                model_type: selectedModelId
+            })
+        });
+        if (resp.ok) {
+            const data = await resp.json();
+            pollSimulation(data.simulation_id);
+        } else {
+            const err = await resp.json();
+            alert('Simulation failed to start: ' + err.detail);
+        }
+    } catch (e) {
+        console.error('Simulation start error', e);
+        alert('Simulation request failed');
+    }
+}
+
+fetchModels();

@@ -14,7 +14,7 @@ def test_health_check():
 
 def test_get_dams_endpoints():
     # Since DB might be mocked or empty, just check 200 or 500 structure
-    response = client.get("/dams")
+    response = client.get("/api/v1/dams")
     assert response.status_code in [200, 500]
 
 def test_invalid_hazard_type():
@@ -81,3 +81,20 @@ def test_simulation_lifecycle():
     with open(val_path, 'r') as f:
         val_data = json.load(f)
         assert val_data["validation_status"] in ["NO SUITABLE SATELLITE OBSERVATION AVAILABLE FOR THIS SCENARIO", "NOT AVAILABLE"]
+
+def test_get_models_endpoint():
+    res = client.get('/api/v1/models')
+    assert res.status_code == 200
+    assert len(res.json()) == 3
+
+def test_sph_model_unavailable_rejection():
+    req = {'hazard_type': 'DAM_BREAK', 'dam_id': '1', 'model_type': 'SPH'}
+    res = client.post('/api/v1/simulations', json=req)
+    assert res.status_code == 400
+    assert 'unavailable' in res.json()['detail'].lower()
+
+def test_delft3d_model_unavailable_rejection():
+    req = {'hazard_type': 'DAM_BREAK', 'dam_id': '1', 'model_type': 'DELFT3D'}
+    res = client.post('/api/v1/simulations', json=req)
+    assert res.status_code == 400
+    assert 'unavailable' in res.json()['detail'].lower()
