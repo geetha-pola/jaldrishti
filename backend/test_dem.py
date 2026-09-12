@@ -13,19 +13,20 @@ requests.Session.request = patched_request
 # Ensure backend directory is in path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.gis.dem_acquisition import DEMProcessor
+from app.gis.dem_acquisition import DEMProcessor, DEMConfig
 
 logging.basicConfig(level=logging.INFO)
 
 def test_dem_pipeline():
-    processor = DEMProcessor(output_dir="data/dem")
+    config = DEMConfig(output_dir="data/dem", buffer_degrees=0.01) # Small buffer for test speed
+    processor = DEMProcessor(config=config)
     
     # Idukki Dam Coordinates
     lat = 9.8433
     lon = 76.9763
     
     # 1. Test AOI Generation
-    bbox = processor.define_aoi(lat, lon, buffer_degrees=0.01) # Use smaller buffer for test speed
+    bbox = processor.define_aoi(lat, lon)
     print(f"Generated AOI for Idukki Dam: {bbox}")
     
     # 2. Test Discovery
@@ -38,7 +39,7 @@ def test_dem_pipeline():
         
         # 3. Test Download & Processing
         print("Starting processing pipeline (this may download real DEM data)...")
-        result = processor.process_dem(lat, lon, "Idukki_Dam", buffer_degrees=0.01)
+        result = processor.process_dem(lat, lon, "Idukki_Dam")
         print("\n=== PIPELINE RESULT ===")
         for k, v in result.items():
             print(f"{k}: {v}")
