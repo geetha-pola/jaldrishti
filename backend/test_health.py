@@ -58,7 +58,7 @@ def test_get_dams():
     print("Get dams logic passed!")
 
 def test_get_dam():
-    dam = get_dam(dam_id=1, db=DummyDamSession())
+    dam = get_dam(dam_id="DAM-123456", db=DummyDamSession())
     assert dam["name"] == "Idukki Dam"
     assert dam["height_m"] == 168.91
     print("Get dam logic passed!")

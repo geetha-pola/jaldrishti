@@ -10,31 +10,55 @@ from app.hydrodynamics.adapter import ModelRegistry
 from app.gis.impact_analysis import ImpactAnalyzer
 from app.satellite.validation import SatelliteValidator
 
-# We will use a simple file-based state store for this milestone
-STATE_DIR = "data/simulations"
-os.makedirs(STATE_DIR, exist_ok=True)
+from app.database import SessionLocal
+from app.models import Simulation
 
 class SimulationService:
     @staticmethod
-    def get_state_path(sim_id: str) -> str:
-        return os.path.join(STATE_DIR, f"{sim_id}.json")
-
-    @staticmethod
-    def _save_state(sim_id: str, state: dict):
-        with open(SimulationService.get_state_path(sim_id), 'w') as f:
-            json.dump(state, f, indent=4)
+    def _get_state_dict(sim: Simulation) -> dict:
+        if not sim:
+            return None
+        return {
+            "simulation_id": sim.simulation_id,
+            "status": sim.status,
+            "current_stage": sim.current_stage,
+            "progress": sim.progress,
+            "error": sim.error_information,
+            "request": {
+                "hazard_type": sim.hazard_type,
+                "dam_id": sim.dam_id,
+                "lake_id": sim.lake_id,
+                "scenario_id": sim.scenario_id,
+                "model_type": sim.requested_model
+            },
+            "requested_model": sim.requested_model,
+            "actual_model": sim.actual_model,
+            "results": {
+                "extent_path": sim.extent_path,
+                "depth_path": sim.depth_path,
+                "arrival_path": sim.arrival_path,
+                "impact_summary_path": sim.impact_summary_path,
+                "satellite_validation_path": sim.satellite_validation_path,
+                "export_package_path": sim.export_package_path,
+                "max_depth_m": None, # Kept for API compatibility
+                "max_velocity_mps": None # Kept for API compatibility
+            }
+        }
 
     @staticmethod
     def get_state(sim_id: str) -> dict:
-        path = SimulationService.get_state_path(sim_id)
-        if not os.path.exists(path):
+        db = SessionLocal()
+        try:
+            sim = db.query(Simulation).filter(Simulation.simulation_id == sim_id).first()
+            return SimulationService._get_state_dict(sim)
+        except Exception as e:
+            logger.error(f"Failed to get simulation state: {e}")
             return None
-        with open(path, 'r') as f:
-            return json.load(f)
+        finally:
+            db.close()
 
     @staticmethod
     def create_simulation(req: schemas.SimulationRequest) -> str:
-        # Validate hazard type
         if req.hazard_type not in ["DAM_BREAK", "GLOF"]:
             raise ValueError(f"Unsupported hazard type: {req.hazard_type}")
 
@@ -53,52 +77,56 @@ class SimulationService:
         if not adapter.is_available:
             raise ValueError(f"Model {model_type} runtime is unavailable in current environment")
             
-        sim_id = f"SIM-{uuid.uuid4().hex[:6]}"
+        db = SessionLocal()
+        try:
+            sim = Simulation(
+                hazard_type=req.hazard_type,
+                dam_id=req.dam_id if req.hazard_type == "DAM_BREAK" else None,
+                lake_id=req.lake_id if req.hazard_type == "GLOF" else None,
+                requested_model=model_type,
+                actual_model=model_type,
+                status="QUEUED",
+                current_stage="INITIALIZATION",
+                progress=0.0
+            )
+            db.add(sim)
+            db.commit()
+            sim_id = sim.simulation_id
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
         
-        state = {
-            "simulation_id": sim_id,
-            "status": "QUEUED",
-            "current_stage": "INITIALIZATION",
-            "progress": 0.0,
-            "error": None,
-            "request": req.model_dump(),
-            "requested_model": model_type,
-            "actual_model": model_type,
-            "results": {}
-        }
-        
-        SimulationService._save_state(sim_id, state)
         return sim_id
 
     @staticmethod
     def run_simulation(sim_id: str):
-        state = SimulationService.get_state(sim_id)
-        if not state:
-            return
-            
+        db = SessionLocal()
         try:
-            state["status"] = "RUNNING"
-            state["current_stage"] = "LOADING_SCENARIO"
-            state["progress"] = 10.0
-            SimulationService._save_state(sim_id, state)
-            
-            req = state["request"]
-            
-            if req["hazard_type"] == "GLOF":
-                from app.main import get_lake
-                lake = get_lake(req["lake_id"])
+            sim = db.query(Simulation).filter(Simulation.simulation_id == sim_id).first()
+            if not sim:
+                return
                 
-                # We need a DEM path and crs for the scenario generator.
-                # In a real app we'd query the DEM catalog for the lake's bounds.
-                # For this milestone, we'll use the existing Idukki DEM but re-reference it or just
-                # use it as a placeholder if we don't have a Sikkim DEM in data/dem.
-                # Actually, wait. Idukki DEM is in EPSG:32643. South Lhonak is in Sikkim (UTM Zone 45N -> EPSG:32645).
-                # The prompt says: "Do not create a second unrelated hydrodynamic execution path."
-                # I will generate the GLOF scenario but feed it the existing test DEM path if needed,
-                # or just use Idukki DEM as the placeholder "terrain".
-                # Let's check what DEMs are available.
+            sim.status = "RUNNING"
+            sim.current_stage = "LOADING_SCENARIO"
+            sim.progress = 10.0
+            db.commit()
+            
+            if sim.hazard_type == "GLOF":
+                from app.models import GlacialLake
+                lake_db = db.query(GlacialLake).filter(GlacialLake.id == sim.lake_id).first()
+                if not lake_db:
+                    raise ValueError(f"Lake {sim.lake_id} not found in DB")
+                lake = {
+                    "id": lake_db.id,
+                    "latitude": lake_db.latitude,
+                    "longitude": lake_db.longitude,
+                    "estimated_volume_m3": lake_db.estimated_volume_m3,
+                    "estimated_depth_m": lake_db.estimated_depth_m
+                }
+                
                 dem_path = 'data/domain/projected_dem.tif'
-                # Let's extract bounds from that dem as dummy bounds to prevent crash during hydro run
                 import rasterio
                 with rasterio.open(dem_path) as src:
                     b = src.bounds
@@ -116,42 +144,32 @@ class SimulationService:
                     
                 model_input = StandardizedModelInput(**scenario_data)
             
-            state["current_stage"] = "HYDRODYNAMIC_SIMULATION"
-            state["progress"] = 30.0
-            SimulationService._save_state(sim_id, state)
+            sim.current_stage = "HYDRODYNAMIC_SIMULATION"
+            sim.progress = 30.0
+            db.commit()
             
-            model_type = state.get("requested_model", "BASELINE_DIFFUSIVE_WAVE")
+            model_type = sim.requested_model or "BASELINE_DIFFUSIVE_WAVE"
             adapter = ModelRegistry.get_adapter(model_type)
             if not adapter.is_available:
                 raise RuntimeError(f"Runtime for {model_type} is unavailable")
                 
-            # Allow model adapter to prepare input specific to it (e.g XML for SPH)
             adapter.prepare_input(model_input, output_dir="data/hydro_results")
-            
-            # Execute Model
             result = adapter.run(model_input, output_dir="data/hydro_results")
             
-            # Store paths
-            extent_path = result.flood_extent_geojson
-            depth_path = result.max_depth_tif
-            arrival_path = result.arrival_time_tif
-            
-            state["results"]["extent_path"] = extent_path
-            state["results"]["depth_path"] = depth_path
-            state["results"]["arrival_path"] = arrival_path
-            state["results"]["max_depth_m"] = result.max_simulated_depth_m
-            state["results"]["max_velocity_mps"] = result.max_simulated_velocity_mps
+            sim.extent_path = result.flood_extent_geojson
+            sim.depth_path = result.max_depth_tif
+            sim.arrival_path = result.arrival_time_tif
+            db.commit()
             
             # --- IMPACT ANALYSIS STAGE ---
-            state["current_stage"] = "IMPACT_ANALYSIS"
-            state["progress"] = 60.0
-            SimulationService._save_state(sim_id, state)
+            sim.current_stage = "IMPACT_ANALYSIS"
+            sim.progress = 60.0
+            db.commit()
             
-            # In a real system, we'd pass proper paths
             impact_analyzer = ImpactAnalyzer(
-                extent_path=extent_path,
-                depth_path=depth_path,
-                arrival_path=arrival_path,
+                extent_path=result.flood_extent_geojson,
+                depth_path=result.max_depth_tif,
+                arrival_path=result.arrival_time_tif,
                 output_dir="data/impact_results"
             )
             
@@ -159,34 +177,39 @@ class SimulationService:
                 sim_id=result.simulation_id,
                 scenario_id=model_input.scenario_id
             )
-            state["results"]["impact_summary_path"] = impact_path
+            sim.impact_summary_path = impact_path
+            db.commit()
             
             # --- SATELLITE VALIDATION STAGE ---
-            state["current_stage"] = "SATELLITE_VALIDATION"
-            state["progress"] = 80.0
-            SimulationService._save_state(sim_id, state)
+            sim.current_stage = "SATELLITE_VALIDATION"
+            sim.progress = 80.0
+            db.commit()
             
-            event_date = state["request"].get("event_date")
             satellite_validator = SatelliteValidator(output_dir="data/satellite_results")
-            
             sat_summary = satellite_validator.validate_simulation(
                 sim_id=result.simulation_id,
-                modeled_extent_path=extent_path,
-                event_date=event_date
+                modeled_extent_path=result.flood_extent_geojson,
+                event_date=None
             )
             
-            # Path to the saved validation summary
             sat_path = os.path.join("data/satellite_results", f"{result.simulation_id}_satellite_validation.json")
-            state["results"]["satellite_validation_path"] = sat_path
+            sim.satellite_validation_path = sat_path
             
             # --- COMPLETION ---
-            state["status"] = "COMPLETED"
-            state["current_stage"] = "COMPLETED"
-            state["progress"] = 100.0
-            SimulationService._save_state(sim_id, state)
+            sim.status = "COMPLETED"
+            sim.current_stage = "COMPLETED"
+            sim.progress = 100.0
+            sim.completed_at = datetime.utcnow()
+            db.commit()
             
         except Exception as e:
             logging.error(f"Simulation {sim_id} failed: {str(e)}", exc_info=True)
-            state["status"] = "FAILED"
-            state["error"] = str(e)
-            SimulationService._save_state(sim_id, state)
+            db.rollback()
+            sim = db.query(Simulation).filter(Simulation.simulation_id == sim_id).first()
+            if sim:
+                sim.status = "FAILED"
+                sim.error_information = str(e)
+                sim.completed_at = datetime.utcnow()
+                db.commit()
+        finally:
+            db.close()

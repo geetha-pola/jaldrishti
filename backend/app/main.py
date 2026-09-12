@@ -57,104 +57,85 @@ def get_models():
 
 from app.schemas import GlacialLakeResponse
 
-LAKE_DB = [
-    {
-        'id': 'LAKE-001',
-        'name': 'South Lhonak Lake (Sample)',
-        'latitude': 27.915,
-        'longitude': 88.196,
-        'elevation_m': 5200.0,
-        'area_sq_m': 1.67e6,
-        'estimated_depth_m': 50.0,
-        'estimated_volume_m3': 8.35e7,
-        'downstream_river': 'Teesta River',
-        'source': 'Sample Satellite Observation',
-        'source_date': '2026-09-01',
-        'provenance': 'ESTIMATED',
-        'notes': 'Sample lake representing South Lhonak lake for stress testing.',
-        'geojson': {
-            'type': 'Feature',
-            'geometry': {'type': 'Point', 'coordinates': [88.196, 27.915]},
-            'properties': {'name': 'South Lhonak Lake (Sample)'}
-        }
-    }
-]
-
 @app.get('/api/v1/lakes', response_model=list[GlacialLakeResponse])
-def get_lakes():
-    return LAKE_DB
+def get_lakes(db: Session = Depends(get_db)):
+    try:
+        query = db.query(models.GlacialLake, ST_AsGeoJSON(models.GlacialLake.geometry).label("geojson")).all()
+        results = []
+        for lake, geojson_str in query:
+            lake_dict = {
+                "id": lake.id, "name": lake.name, "latitude": lake.latitude, "longitude": lake.longitude,
+                "elevation_m": lake.elevation_m, "area_sq_m": lake.area_sq_m,
+                "estimated_depth_m": lake.estimated_depth_m, "estimated_volume_m3": lake.estimated_volume_m3,
+                "downstream_river": lake.downstream_river, "source": lake.source, "source_date": lake.source_date,
+                "provenance": lake.provenance, "notes": lake.notes,
+                "geojson": json.loads(geojson_str) if geojson_str else None
+            }
+            results.append(lake_dict)
+        return results
+    except Exception as e:
+        logger.error(f"Database error in get_lakes: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 @app.get('/api/v1/lakes/{lake_id}', response_model=GlacialLakeResponse)
-def get_lake(lake_id: str):
-    for lake in LAKE_DB:
-        if lake['id'] == lake_id:
-            return lake
-    raise HTTPException(status_code=404, detail='Lake not found')
+def get_lake(lake_id: str, db: Session = Depends(get_db)):
+    try:
+        lake, geojson_str = db.query(models.GlacialLake, ST_AsGeoJSON(models.GlacialLake.geometry).label("geojson")).filter(models.GlacialLake.id == lake_id).first()
+        if not lake:
+            raise HTTPException(status_code=404, detail='Lake not found')
+        lake_dict = {
+            "id": lake.id, "name": lake.name, "latitude": lake.latitude, "longitude": lake.longitude,
+            "elevation_m": lake.elevation_m, "area_sq_m": lake.area_sq_m,
+            "estimated_depth_m": lake.estimated_depth_m, "estimated_volume_m3": lake.estimated_volume_m3,
+            "downstream_river": lake.downstream_river, "source": lake.source, "source_date": lake.source_date,
+            "provenance": lake.provenance, "notes": lake.notes,
+            "geojson": json.loads(geojson_str) if geojson_str else None
+        }
+        return lake_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Database error in get_lake: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 @app.get("/api/v1/dams", response_model=list[schemas.DamResponse])
 def get_dams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Fetch all dams with their geometries as GeoJSON"""
     try:
-        query = db.query(models.Dam, ST_AsGeoJSON(models.Dam.location).label("geojson")).offset(skip).limit(limit).all()
+        query = db.query(models.Dam, ST_AsGeoJSON(models.Dam.geometry).label("geojson")).offset(skip).limit(limit).all()
         results = []
         for dam, geojson_str in query:
             dam_dict = {
                 "id": dam.id, "name": dam.name, "river": dam.river, "state": dam.state,
                 "height_m": dam.height_m, "capacity_mcm": dam.capacity_mcm,
-                "latest_storage_mcm": dam.latest_storage_mcm, "last_updated": dam.last_updated,
+                "latest_storage_mcm": dam.capacity_mcm, "last_updated": dam.created_at,
                 "created_at": dam.created_at, "geojson": json.loads(geojson_str) if geojson_str else None
             }
             results.append(dam_dict)
         return results
     except Exception as e:
-        logger.warning(f"Database unavailable for get_dams, returning mock data. Error: {e}")
-        return [
-            {
-                "id": 1, "name": "Idukki Dam", "river": "Periyar", "state": "Kerala",
-                "height_m": 168.91, "capacity_mcm": 1996.3, "latest_storage_mcm": 1500.0,
-                "last_updated": None, "created_at": "2026-09-01T00:00:00",
-                "geojson": {"type": "Point", "coordinates": [76.9763, 9.8433]}
-            },
-            {
-                "id": 2, "name": "Mullaperiyar Dam", "river": "Periyar", "state": "Kerala",
-                "height_m": 53.6, "capacity_mcm": 443.23, "latest_storage_mcm": 300.0,
-                "last_updated": None, "created_at": "2026-09-01T00:00:00",
-                "geojson": {"type": "Point", "coordinates": [77.1472, 9.5286]}
-            }
-        ]
+        logger.error(f"Database error in get_dams: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 @app.get("/api/v1/dams/{dam_id}", response_model=schemas.DamResponse)
-def get_dam(dam_id: int, db: Session = Depends(get_db)):
+def get_dam(dam_id: str, db: Session = Depends(get_db)):
     """Fetch a specific dam by ID"""
     try:
-        result = db.query(models.Dam, ST_AsGeoJSON(models.Dam.location).label("geojson")).filter(models.Dam.id == dam_id).first()
+        result = db.query(models.Dam, ST_AsGeoJSON(models.Dam.geometry).label("geojson")).filter(models.Dam.id == dam_id).first()
         if result:
             dam, geojson_str = result
             return {
                 "id": dam.id, "name": dam.name, "river": dam.river, "state": dam.state,
                 "height_m": dam.height_m, "capacity_mcm": dam.capacity_mcm,
-                "latest_storage_mcm": dam.latest_storage_mcm, "last_updated": dam.last_updated,
+                "latest_storage_mcm": dam.capacity_mcm, "last_updated": dam.created_at,
                 "created_at": dam.created_at, "geojson": json.loads(geojson_str) if geojson_str else None
             }
+        raise HTTPException(status_code=404, detail="Dam not found")
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.warning(f"Database unavailable for get_dam, returning mock data. Error: {e}")
-        
-    # Fallback mock data
-    if dam_id == 1:
-        return {
-            "id": 1, "name": "Idukki Dam", "river": "Periyar", "state": "Kerala",
-            "height_m": 168.91, "capacity_mcm": 1996.3, "latest_storage_mcm": 1500.0,
-            "last_updated": None, "created_at": "2026-09-01T00:00:00",
-            "geojson": {"type": "Point", "coordinates": [76.9763, 9.8433]}
-        }
-    elif dam_id == 2:
-        return {
-            "id": 2, "name": "Mullaperiyar Dam", "river": "Periyar", "state": "Kerala",
-            "height_m": 53.6, "capacity_mcm": 443.23, "latest_storage_mcm": 300.0,
-            "last_updated": None, "created_at": "2026-09-01T00:00:00",
-            "geojson": {"type": "Point", "coordinates": [77.1472, 9.5286]}
-        }
-    raise HTTPException(status_code=404, detail="Dam not found")
+        logger.error(f"Database error in get_dam: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 from fastapi import BackgroundTasks
 from app.services.simulation_service import SimulationService

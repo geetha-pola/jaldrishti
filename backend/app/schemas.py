@@ -16,7 +16,7 @@ class DamCreate(DamBase):
     lon: float
 
 class DamResponse(DamBase):
-    id: int
+    id: str
     created_at: datetime
     # We will return geojson point for the frontend
     geojson: Any

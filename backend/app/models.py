@@ -1,54 +1,78 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, JSON
 from geoalchemy2 import Geometry
 from .database import Base
 from sqlalchemy.sql import func
+import uuid
 
 class Dam(Base):
     __tablename__ = "dams"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, default=lambda: f"DAM-{uuid.uuid4().hex[:6]}", index=True)
     name = Column(String, index=True)
     river = Column(String, index=True)
     state = Column(String, index=True)
-    location = Geometry('POINT', srid=4326) # Real coordinates
     height_m = Column(Float)
-    capacity_mcm = Column(Float) # Capacity in Million Cubic Meters (Mm3)
-    latest_storage_mcm = Column(Float, nullable=True)
-    last_updated = Column(DateTime(timezone=True), nullable=True)
+    capacity_mcm = Column(Float)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    geometry = Column(Geometry('POINT', srid=4326))
+    source = Column(String)
+    source_date = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class GlacialLake(Base):
     __tablename__ = "glacial_lakes"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, default=lambda: f"LAKE-{uuid.uuid4().hex[:6]}", index=True)
     name = Column(String, index=True)
-    location = Geometry('POINT', srid=4326)
-    estimated_volume = Column(Float)
+    latitude = Column(Float)
+    longitude = Column(Float)
+    elevation_m = Column(Float)
+    area_sq_m = Column(Float)
+    estimated_depth_m = Column(Float)
+    estimated_volume_m3 = Column(Float)
+    downstream_river = Column(String)
+    geometry = Column(Geometry('POINT', srid=4326))
+    source = Column(String)
+    source_date = Column(String)
+    provenance = Column(String)
+    notes = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-class SimulationDomain(Base):
-    __tablename__ = "simulation_domains"
+class Scenario(Base):
+    __tablename__ = "scenarios"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, index=True)
-    boundary = Geometry('POLYGON', srid=4326) # The downstream corridor
+    scenario_id = Column(String, primary_key=True, default=lambda: f"SCENARIO-{uuid.uuid4().hex[:6]}", index=True)
+    scenario_type = Column(String)
+    parameter_metadata = Column(JSON)
+    provenance = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-class FloodResult(Base):
-    __tablename__ = "flood_results"
+class Simulation(Base):
+    __tablename__ = "simulations"
 
-    id = Column(Integer, primary_key=True, index=True)
-    simulation_id = Column(String, index=True) # E.g., SIM-025
-    hazard_type = Column(String) # GLOF or DAM_BREAK
-    flood_extent = Geometry('MULTIPOLYGON', srid=4326) # The max flooded area
-    max_depth_raster_path = Column(String) # Reference to GeoTIFF file
+    simulation_id = Column(String, primary_key=True, default=lambda: f"SIM-{uuid.uuid4().hex[:6]}", index=True)
+    hazard_type = Column(String)
+    dam_id = Column(String, ForeignKey("dams.id"), nullable=True)
+    lake_id = Column(String, ForeignKey("glacial_lakes.id"), nullable=True)
+    scenario_id = Column(String, ForeignKey("scenarios.scenario_id"), nullable=True)
+    
+    requested_model = Column(String)
+    actual_model = Column(String)
+    status = Column(String, default="QUEUED")
+    progress = Column(Float, default=0.0)
+    current_stage = Column(String)
+    
+    # Result references
+    extent_path = Column(String, nullable=True)
+    depth_path = Column(String, nullable=True)
+    velocity_path = Column(String, nullable=True)
+    arrival_path = Column(String, nullable=True)
+    impact_summary_path = Column(String, nullable=True)
+    satellite_validation_path = Column(String, nullable=True)
+    export_package_path = Column(String, nullable=True)
+    
+    error_information = Column(String, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-class ImpactData(Base):
-    __tablename__ = "impact_data"
-
-    id = Column(Integer, primary_key=True, index=True)
-    flood_result_id = Column(Integer, ForeignKey("flood_results.id"))
-    infrastructure_type = Column(String) # e.g. "road", "building"
-    impact_geometry = Geometry('GEOMETRY', srid=4326) # The specific affected infrastructure
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
