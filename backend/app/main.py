@@ -54,6 +54,43 @@ from app.hydrodynamics.adapter import ModelRegistry
 def get_models():
     return ModelRegistry.list_models()
 
+
+from app.schemas import GlacialLakeResponse
+
+LAKE_DB = [
+    {
+        'id': 'LAKE-001',
+        'name': 'South Lhonak Lake (Sample)',
+        'latitude': 27.915,
+        'longitude': 88.196,
+        'elevation_m': 5200.0,
+        'area_sq_m': 1.67e6,
+        'estimated_depth_m': 50.0,
+        'estimated_volume_m3': 8.35e7,
+        'downstream_river': 'Teesta River',
+        'source': 'Sample Satellite Observation',
+        'source_date': '2026-09-01',
+        'provenance': 'ESTIMATED',
+        'notes': 'Sample lake representing South Lhonak lake for stress testing.',
+        'geojson': {
+            'type': 'Feature',
+            'geometry': {'type': 'Point', 'coordinates': [88.196, 27.915]},
+            'properties': {'name': 'South Lhonak Lake (Sample)'}
+        }
+    }
+]
+
+@app.get('/api/v1/lakes', response_model=list[GlacialLakeResponse])
+def get_lakes():
+    return LAKE_DB
+
+@app.get('/api/v1/lakes/{lake_id}', response_model=GlacialLakeResponse)
+def get_lake(lake_id: str):
+    for lake in LAKE_DB:
+        if lake['id'] == lake_id:
+            return lake
+    raise HTTPException(status_code=404, detail='Lake not found')
+
 @app.get("/api/v1/dams", response_model=list[schemas.DamResponse])
 def get_dams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Fetch all dams with their geometries as GeoJSON"""

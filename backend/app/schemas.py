@@ -26,7 +26,8 @@ class DamResponse(DamBase):
 
 class SimulationRequest(BaseModel):
     hazard_type: str
-    dam_id: str
+    dam_id: Optional[str] = None
+    lake_id: Optional[str] = None
     scenario_id: Optional[str] = None
     event_date: Optional[str] = None
     model_type: Optional[str] = "BASELINE_DIFFUSIVE_WAVE"
@@ -54,3 +55,21 @@ class SimulationResultsResponse(BaseModel):
     satellite_validation_path: Optional[str] = None
     max_depth_m: Optional[float] = None
     max_velocity_mps: Optional[float] = None
+
+class GlacialLakeBase(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    elevation_m: Optional[float] = None
+    area_sq_m: Optional[float] = None
+    estimated_depth_m: Optional[float] = None
+    estimated_volume_m3: Optional[float] = None
+    downstream_river: Optional[str] = None
+    source: Optional[str] = None
+    source_date: Optional[str] = None
+    provenance: str
+    notes: Optional[str] = None
+
+class GlacialLakeResponse(GlacialLakeBase):
+    id: str
+    geojson: Any
