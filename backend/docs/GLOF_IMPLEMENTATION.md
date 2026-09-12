@@ -30,14 +30,18 @@ Sample dataset provided: **South Lhonak Lake (Sample)**
 
 ## 4. Equations and References
 **Peak Discharge ($Q_p$) Estimation**:
-The peak discharge is estimated using the empirical relationship established for moraine-dammed lakes:
+The peak discharge is an empirical estimate using the relationship established for moraine-dammed lakes:
 `Q_p = 0.00013 * (V)^{1.04}`
-*(Source: Walder and O'Connor, 1997)*
+*(Source: Costa, 1988)*
+
+This equation uses lake/outburst water volume ($V$). It is not a universal physical law, and site-specific GLOF behavior may differ substantially.
 
 **Outburst Hydrograph**:
-A conservative triangular hydrograph is generated conserving total mass:
+An idealized triangular hydrograph is generated for scenario simulation, conserving the defined scenario volume:
 `T_{base} = \frac{2V}{Q_p}`
 The peak is assumed to occur rapidly (e.g., at 20% of $T_{base}$).
+
+Volume conservation here is a mathematical conservation of the defined scenario volume, NOT proof that the hydrograph is physically realistic.
 
 ## 5. Model Distinctions
 - **BASELINE_DIFFUSIVE_WAVE**: A custom, fast 2D approximation that natively executes in the Python backend. It handles both Dam Break and GLOF scenarios.

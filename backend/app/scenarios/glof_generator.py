@@ -34,8 +34,8 @@ class GLOFScenarioGenerator:
         
         # 2. Estimate Peak Discharge (Qp)
         # Using empirical relationship for moraine-dammed lakes: 
-        # Walder and O'Connor (1997): Qp = 0.00013 * V^1.04 (for V in m3)
-        # Note: This is a rough empirical envelope curve.
+        # Costa (1988): Qp = 0.00013 * V^1.04 (for V in m3)
+        # Note: This is an empirical envelope curve and not a universal physical law.
         q_peak = 0.00013 * math.pow(volume_m3, 1.04)
         
         # 3. Create idealized triangular hydrograph
@@ -86,7 +86,7 @@ class GLOFScenarioGenerator:
             manning_roughness=ParameterValue(value=0.04, unit="n", provenance=ProvenanceStatus.ASSUMED, assumptions="Typical mountain river valley roughness"),
             generated_at=datetime.utcnow().isoformat(),
             limitations=[
-                "EMPIRICAL PEAK: Qp estimated via Walder and O'Connor (1997) for moraine-dammed lakes. May not represent specific local geology.",
+                "EMPIRICAL PEAK: Qp estimated via Costa (1988) for moraine-dammed lakes. This is an empirical estimate, not a universal physical law, and may differ substantially from site-specific behavior.",
                 "100% RELEASE: Assumes total instantaneous volume release, representing an absolute worst-case stress test, NOT a specific prediction.",
                 "TRIANGULAR HYDROGRAPH: Uses simplified geometric hydrograph rather than physically modeled breach widening.",
                 "JALDRISHTI does not predict exactly when a GLOF will occur. It simulates the downstream consequences of a defined or estimated outburst scenario."
