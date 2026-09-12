@@ -91,3 +91,53 @@ def get_dam(dam_id: int, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+from fastapi import BackgroundTasks
+from app.services.simulation_service import SimulationService
+
+@app.post("/api/v1/simulations", response_model=schemas.SimulationResponse)
+def create_simulation(req: schemas.SimulationRequest, background_tasks: BackgroundTasks):
+    try:
+        sim_id = SimulationService.create_simulation(req)
+        # Dispatch background task
+        background_tasks.add_task(SimulationService.run_simulation, sim_id)
+        return {"simulation_id": sim_id, "status": "QUEUED"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/simulations/{sim_id}", response_model=schemas.SimulationStatusResponse)
+def get_simulation_status(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+        
+    return {
+        "simulation_id": state["simulation_id"],
+        "status": state["status"],
+        "current_stage": state.get("current_stage"),
+        "progress": state.get("progress"),
+        "error": state.get("error")
+    }
+
+@app.get("/api/v1/simulations/{sim_id}/results", response_model=schemas.SimulationResultsResponse)
+def get_simulation_results(sim_id: str):
+    state = SimulationService.get_state(sim_id)
+    if not state:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+        
+    if state["status"] != "COMPLETED":
+        raise HTTPException(status_code=400, detail="Simulation is not completed")
+        
+    res = state.get("results", {})
+    return {
+        "simulation_id": state["simulation_id"],
+        "status": state["status"],
+        "extent_path": res.get("extent_path"),
+        "depth_path": res.get("depth_path"),
+        "arrival_path": res.get("arrival_path"),
+        "impact_summary_path": res.get("impact_summary_path"),
+        "satellite_validation_path": res.get("satellite_validation_path")
+    }
+

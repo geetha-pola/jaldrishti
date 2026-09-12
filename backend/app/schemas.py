@@ -23,3 +23,29 @@ class DamResponse(DamBase):
 
     class Config:
         from_attributes = True
+
+class SimulationRequest(BaseModel):
+    hazard_type: str
+    dam_id: str
+    scenario_id: Optional[str] = None
+    event_date: Optional[str] = None
+
+class SimulationResponse(BaseModel):
+    simulation_id: str
+    status: str
+
+class SimulationStatusResponse(BaseModel):
+    simulation_id: str
+    status: str
+    current_stage: Optional[str] = None
+    progress: Optional[float] = None
+    error: Optional[str] = None
+
+class SimulationResultsResponse(BaseModel):
+    simulation_id: str
+    status: str
+    extent_path: Optional[str] = None
+    depth_path: Optional[str] = None
+    arrival_path: Optional[str] = None
+    impact_summary_path: Optional[str] = None
+    satellite_validation_path: Optional[str] = None
