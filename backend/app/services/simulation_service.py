@@ -53,7 +53,7 @@ class SimulationService:
             return SimulationService._get_state_dict(sim)
         except Exception as e:
             logger.error(f"Failed to get simulation state: {e}")
-            return None
+            raise e
         finally:
             db.close()
 

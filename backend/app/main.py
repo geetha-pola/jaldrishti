@@ -150,11 +150,19 @@ def create_simulation(req: schemas.SimulationRequest, background_tasks: Backgrou
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Database error in create_simulation: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+def _get_simulation_state(sim_id: str):
+    try:
+        return _get_simulation_state(sim_id)
+    except Exception as e:
+        logger.error(f"Database error while fetching simulation state: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable")
 
 @app.get("/api/v1/simulations/{sim_id}", response_model=schemas.SimulationStatusResponse)
 def get_simulation_status(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state:
         raise HTTPException(status_code=404, detail="Simulation not found")
         
@@ -170,7 +178,7 @@ def get_simulation_status(sim_id: str):
 
 @app.get("/api/v1/simulations/{sim_id}/results", response_model=schemas.SimulationResultsResponse)
 def get_simulation_results(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state:
         raise HTTPException(status_code=404, detail="Simulation not found")
         
@@ -195,7 +203,7 @@ from fastapi.responses import FileResponse
 
 @app.get("/api/v1/simulations/{sim_id}/geojson")
 def get_simulation_geojson(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state["status"] != "COMPLETED":
         raise HTTPException(status_code=404, detail="Simulation not found or not completed")
     path = state.get("results", {}).get("extent_path")
@@ -205,7 +213,7 @@ def get_simulation_geojson(sim_id: str):
 
 @app.get("/api/v1/simulations/{sim_id}/impact")
 def get_simulation_impact(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state["status"] != "COMPLETED":
         raise HTTPException(status_code=404, detail="Simulation not found or not completed")
     path = state.get("results", {}).get("impact_summary_path")
@@ -215,7 +223,7 @@ def get_simulation_impact(sim_id: str):
 
 @app.get("/api/v1/simulations/{sim_id}/satellite")
 def get_simulation_satellite(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state["status"] != "COMPLETED":
         raise HTTPException(status_code=404, detail="Simulation not found or not completed")
     path = state.get("results", {}).get("satellite_validation_path")
@@ -228,7 +236,7 @@ from app.exports import export_to_shapefile_zip, export_to_kml, export_impact_cs
 
 @app.get('/api/v1/simulations/{sim_id}/exports')
 def get_exports_metadata(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED':
         raise HTTPException(status_code=404, detail='Simulation not found or not completed')
     
@@ -250,7 +258,7 @@ def get_exports_metadata(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/extent/geojson')
 def export_extent_geojson(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('extent_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -258,7 +266,7 @@ def export_extent_geojson(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/extent/shp')
 def export_extent_shp(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('extent_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -267,7 +275,7 @@ def export_extent_shp(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/extent/kml')
 def export_extent_kml(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('extent_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -276,7 +284,7 @@ def export_extent_kml(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/depth/geotiff')
 def export_depth_geotiff(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('depth_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -284,7 +292,7 @@ def export_depth_geotiff(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/arrival/geotiff')
 def export_arrival_geotiff(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('arrival_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -292,7 +300,7 @@ def export_arrival_geotiff(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/impact/csv')
 def export_impact_csv_ep(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('impact_summary_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -301,7 +309,7 @@ def export_impact_csv_ep(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/impact/json')
 def export_impact_json(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     path = state.get('results', {}).get('impact_summary_path')
     if not path or not os.path.exists(path): raise HTTPException(status_code=404, detail='Not found')
@@ -309,7 +317,7 @@ def export_impact_json(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/summary/json')
 def export_summary_json(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     impact_path = state.get('results', {}).get('impact_summary_path')
     sat_path = state.get('results', {}).get('satellite_validation_path')
@@ -318,7 +326,7 @@ def export_summary_json(sim_id: str):
 
 @app.get('/api/v1/simulations/{sim_id}/export/package')
 def export_package(sim_id: str):
-    state = SimulationService.get_state(sim_id)
+    state = _get_simulation_state(sim_id)
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     pkg_path = export_full_package(state)
     return FileResponse(pkg_path, media_type='application/zip', filename=f'JALDRISHTI_{sim_id}.zip')
