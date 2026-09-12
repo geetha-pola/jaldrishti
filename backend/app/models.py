@@ -8,9 +8,13 @@ class Dam(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
+    river = Column(String, index=True)
+    state = Column(String, index=True)
     location = Geometry('POINT', srid=4326) # Real coordinates
-    height = Column(Float)
-    capacity = Column(Float)
+    height_m = Column(Float)
+    capacity_mcm = Column(Float) # Capacity in Million Cubic Meters (Mm3)
+    latest_storage_mcm = Column(Float, nullable=True)
+    last_updated = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class GlacialLake(Base):
