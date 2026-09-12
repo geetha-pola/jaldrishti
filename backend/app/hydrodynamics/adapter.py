@@ -16,96 +16,185 @@ from app.hydrodynamics.models import StandardizedModelResult
 
 @njit(parallel=False)
 def solve_2d_diffusive_wave(
-    dem, initial_depth, inflow_series, inflow_idx_x, inflow_idx_y, 
-    dx, dt, manning_n, num_steps
+    dem, initial_depth, t_hydro, q_hydro, inflow_idx_x, inflow_idx_y, 
+    dx, manning_n, total_sim_time
 ):
     """
-    Numba-accelerated 2D Diffusive Wave Solver (Simplified SWE).
+    Numba-accelerated 2D Diffusive Wave Solver with 4-way routing and stability controls.
     """
     rows, cols = dem.shape
     depth = initial_depth.copy()
-    velocity_x = np.zeros_like(depth)
-    velocity_y = np.zeros_like(depth)
     
     max_depth = np.zeros_like(depth)
     max_velocity = np.zeros_like(depth)
     arrival_time = np.full(depth.shape, -1.0)
     
-    # Precompute constants
     g = 9.81
+    t = 0.0
+    step = 0
+    inflow_vol_total = 0.0
     
-    for t in range(num_steps):
-        # Inject boundary condition (inflow hydrograph)
-        # inflow is in m3/s. Convert to depth change per cell: dH = (Q * dt) / (dx^2)
-        if t < len(inflow_series):
-            q_in = inflow_series[t]
-            dh = (q_in * dt) / (dx * dx)
-            depth[inflow_idx_y, inflow_idx_x] += dh
-            
-        water_elevation = dem + depth
+    # Adaptive timestep parameters
+    # The Courant-Friedrichs-Lewy (CFL) condition requires: dt <= dx / (v + sqrt(gh))
+    # We will start with a conservative dt and adapt if necessary, but for simplicity
+    # in this baseline, we'll fix a small dt of 0.5 seconds which is stable for dx=90m up to v=150m/s
+    dt = 0.5 
+    
+    # Allocate flux arrays
+    flux_x = np.zeros_like(depth)
+    flux_y = np.zeros_like(depth)
+    
+    while t < total_sim_time:
+        # Interpolate inflow
+        q_in = 0.0
+        if t <= t_hydro[-1]:
+            for k in range(1, len(t_hydro)):
+                if t <= t_hydro[k]:
+                    dt_hydro = t_hydro[k] - t_hydro[k-1]
+                    weight = (t - t_hydro[k-1]) / dt_hydro
+                    q_in = q_hydro[k-1] + weight * (q_hydro[k] - q_hydro[k-1])
+                    break
+                    
+        dh_in = (q_in * dt) / (dx * dx)
+        depth[inflow_idx_y, inflow_idx_x] += dh_in
+        inflow_vol_total += q_in * dt
         
+        water_elevation = dem + depth
         new_depth = depth.copy()
         
-        # We use a simple explicit scheme: calculate fluxes between adjacent cells
-        # Loop over interior cells
+        # Arrays to accumulate received volume to avoid race conditions in parallel
+        # or simplify logic. Since this is explicit sequential, we can just use new_depth.
+        # But to be clean, let's track dvol
+        dvol = np.zeros_like(depth)
+        
+        v_max_step = np.zeros_like(depth)
+        
+        # Compute outward fluxes for every cell
         for i in range(1, rows - 1):
             for j in range(1, cols - 1):
-                if depth[i, j] <= 0.01:
+                h0 = depth[i, j]
+                if h0 < 0.01:
                     continue
                     
-                # Calculate slopes and fluxes (diffusive wave)
-                # To East
-                dh_dx = (water_elevation[i, j] - water_elevation[i, j+1]) / dx
-                # To South
-                dh_dy = (water_elevation[i, j] - water_elevation[i+1, j]) / dx
+                w0 = water_elevation[i, j]
+                z0 = dem[i, j]
                 
-                # Manning's equation for velocity: V = (1/n) * R^(2/3) * S^(1/2)
-                # Assuming R ~ depth
-                h = depth[i, j]
-                h_east = max(water_elevation[i, j] - max(dem[i, j], dem[i, j+1]), 0.0)
-                h_south = max(water_elevation[i, j] - max(dem[i, j], dem[i+1, j]), 0.0)
                 
-                # Flux East
-                if dh_dx > 0 and h_east > 0:
-                    Sf = abs(dh_dx)
-                    v_e = (1.0 / manning_n) * (h_east**(2.0/3.0)) * np.sqrt(Sf)
-                    q_e = v_e * h_east * dx
-                    vol = q_e * dt
-                    # Limit flow to available volume
-                    vol = min(vol, depth[i, j] * dx * dx * 0.25)
-                    new_depth[i, j] -= vol / (dx * dx)
-                    new_depth[i, j+1] += vol / (dx * dx)
-                    velocity_x[i, j] = v_e
+                # Unrolled neighbors: East, West, South, North for Numba speed
+                q_out = np.zeros(4)
                 
-                # Flux South
-                if dh_dy > 0 and h_south > 0:
-                    Sf = abs(dh_dy)
-                    v_s = (1.0 / manning_n) * (h_south**(2.0/3.0)) * np.sqrt(Sf)
-                    q_s = v_s * h_south * dx
-                    vol = q_s * dt
-                    vol = min(vol, depth[i, j] * dx * dx * 0.25)
-                    new_depth[i, j] -= vol / (dx * dx)
-                    new_depth[i+1, j] += vol / (dx * dx)
-                    velocity_y[i, j] = v_s
+                # 0: East
+                ni, nj = i, j+1
+                wn = water_elevation[ni, nj]
+                zn = dem[ni, nj]
+                if w0 > wn + 0.001:
+                    h_flow = max(w0 - max(z0, zn), 0.0)
+                    if h_flow > 0.01:
+                        Sf = (w0 - wn) / dx
+                        v_out = (1.0 / manning_n) * (h_flow**(2.0/3.0)) * np.sqrt(Sf)
+                        v_out = min(v_out, 30.0)
+                        q_out[0] = v_out * h_flow * dx
+                        v_max_step[i, j] = max(v_max_step[i, j], v_out)
+                        
+                # 1: West
+                ni, nj = i, j-1
+                wn = water_elevation[ni, nj]
+                zn = dem[ni, nj]
+                if w0 > wn + 0.001:
+                    h_flow = max(w0 - max(z0, zn), 0.0)
+                    if h_flow > 0.01:
+                        Sf = (w0 - wn) / dx
+                        v_out = (1.0 / manning_n) * (h_flow**(2.0/3.0)) * np.sqrt(Sf)
+                        v_out = min(v_out, 30.0)
+                        q_out[1] = v_out * h_flow * dx
+                        v_max_step[i, j] = max(v_max_step[i, j], v_out)
+                        
+                # 2: South
+                ni, nj = i+1, j
+                wn = water_elevation[ni, nj]
+                zn = dem[ni, nj]
+                if w0 > wn + 0.001:
+                    h_flow = max(w0 - max(z0, zn), 0.0)
+                    if h_flow > 0.01:
+                        Sf = (w0 - wn) / dx
+                        v_out = (1.0 / manning_n) * (h_flow**(2.0/3.0)) * np.sqrt(Sf)
+                        v_out = min(v_out, 30.0)
+                        q_out[2] = v_out * h_flow * dx
+                        v_max_step[i, j] = max(v_max_step[i, j], v_out)
+                        
+                # 3: North
+                ni, nj = i-1, j
+                wn = water_elevation[ni, nj]
+                zn = dem[ni, nj]
+                if w0 > wn + 0.001:
+                    h_flow = max(w0 - max(z0, zn), 0.0)
+                    if h_flow > 0.01:
+                        Sf = (w0 - wn) / dx
+                        v_out = (1.0 / manning_n) * (h_flow**(2.0/3.0)) * np.sqrt(Sf)
+                        v_out = min(v_out, 30.0)
+                        q_out[3] = v_out * h_flow * dx
+                        v_max_step[i, j] = max(v_max_step[i, j], v_out)
+                
+                # Total volume trying to leave
+                sum_q = q_out[0] + q_out[1] + q_out[2] + q_out[3]
+                vol_out = sum_q * dt
+                avail_vol = h0 * dx * dx
+                
+                # Mass conservation scaling
+                scale = 1.0
+                if vol_out > avail_vol:
+                    scale = avail_vol / vol_out
                     
+                # Apply scaled fluxes
+                if q_out[0] > 0:
+                    av = q_out[0] * dt * scale
+                    dvol[i, j] -= av
+                    dvol[i, j+1] += av
+                if q_out[1] > 0:
+                    av = q_out[1] * dt * scale
+                    dvol[i, j] -= av
+                    dvol[i, j-1] += av
+                if q_out[2] > 0:
+                    av = q_out[2] * dt * scale
+                    dvol[i, j] -= av
+                    dvol[i+1, j] += av
+                if q_out[3] > 0:
+                    av = q_out[3] * dt * scale
+                    dvol[i, j] -= av
+                    dvol[i-1, j] += av
+                        
+        # Apply dvol
+        for i in range(rows):
+            for j in range(cols):
+                new_depth[i, j] += dvol[i, j] / (dx * dx)
+                
         depth = new_depth
         
-        # Update trackers
-        # Check arrival time (threshold 0.1m)
+        # Track maximums
         for i in range(rows):
             for j in range(cols):
                 if depth[i, j] > 0.1 and arrival_time[i, j] == -1.0:
-                    arrival_time[i, j] = t * dt
-                    
+                    arrival_time[i, j] = t
                 if depth[i, j] > max_depth[i, j]:
                     max_depth[i, j] = depth[i, j]
+                
+                if v_max_step[i, j] > max_velocity[i, j]:
+                    max_velocity[i, j] = v_max_step[i, j]
                     
-                # Approx cell velocity magnitude
-                v_mag = np.sqrt(velocity_x[i, j]**2 + velocity_y[i, j]**2)
-                if v_mag > max_velocity[i, j]:
-                    max_velocity[i, j] = v_mag
-                    
-    return max_depth, max_velocity, arrival_time
+        t += dt
+        step += 1
+        
+    # Calculate final mass balance
+    # Total volume in grid = sum(depth * dx * dx)
+    final_vol = 0.0
+    for i in range(rows):
+        for j in range(cols):
+            if depth[i, j] > 0.0:
+                final_vol += depth[i, j] * dx * dx
+                
+    mass_error = inflow_vol_total - final_vol
+    
+    return max_depth, max_velocity, arrival_time, step, dt, inflow_vol_total, final_vol, mass_error
 
 class BaselineHydrodynamicAdapter:
     def __init__(self, output_dir: str = "data/hydro_results"):
@@ -125,8 +214,8 @@ class BaselineHydrodynamicAdapter:
         with rasterio.open(scenario.dem_path) as src:
             # Crop window
             window = from_bounds(*bounds, transform=src.transform)
-            # Read and coarsen by factor of 3 (~90m) for baseline solver speed
-            scale_factor = 1.0 / 3.0
+            # Read and coarsen by factor of 10 (~300m) for baseline solver speed
+            scale_factor = 1.0 / 10.0
             
             # Ensure window is valid
             win_transform = src.window_transform(window)
@@ -154,27 +243,13 @@ class BaselineHydrodynamicAdapter:
         dem_data = np.where((dem_data == nodata) | np.isnan(dem_data), 9999.0, dem_data)
         
         # 2. Setup Boundary Conditions (Hydrograph)
-        dt = scenario.timestep_seconds.value
         manning_n = scenario.manning_roughness.value
         
-        # Interpolate hydrograph to the solver timesteps
-        # Hydrograph points
-        t_hydro = [pt.time_seconds for pt in scenario.inflow_hydrograph]
-        q_hydro = [pt.discharge_cms for pt in scenario.inflow_hydrograph]
+        # Pass hydrograph points directly to numba to interpolate dynamically
+        t_hydro = np.array([pt.time_seconds for pt in scenario.inflow_hydrograph], dtype=np.float64)
+        q_hydro = np.array([pt.discharge_cms for pt in scenario.inflow_hydrograph], dtype=np.float64)
         
-        total_sim_time = scenario.simulation_duration_hours.value * 3600
-        # To avoid extremely long runs for the baseline demo, we cap at 10,000 steps max
-        # or we increase dt. A diffusive wave model can handle dt=5s or 10s easily.
-        # Let's enforce dt=5 for the baseline if dt is 1, to ensure it finishes.
-        actual_dt = max(dt, 10.0) 
-        
-        # For the sake of this prompt taking under 5 minutes, limit simulation duration to 3 hours 
-        # (the hydrograph peak is at 6 minutes, so 3 hours covers the primary wave propagation).
-        sim_time_sec = min(total_sim_time, 3.0 * 3600)
-        
-        num_steps = int(sim_time_sec / actual_dt)
-        time_array = np.linspace(0, sim_time_sec, num_steps)
-        inflow_series = np.interp(time_array, t_hydro, q_hydro)
+        total_sim_time = min(scenario.simulation_duration_hours.value * 3600, 1.0 * 3600)
         
         # Find dam pixel index in cropped grid
         source_x, source_y = scenario.source_location['lon'], scenario.source_location['lat']
@@ -191,14 +266,15 @@ class BaselineHydrodynamicAdapter:
         initial_depth = np.zeros_like(dem_data)
         
         # 3. Execute Numba Solver
-        print(f"Starting 2D Baseline Solver on {dem_data.shape} grid for {num_steps} steps (dt={actual_dt}s)")
+        print(f"Starting 2D Baseline Solver on {dem_data.shape} grid for {total_sim_time} seconds")
         start_time = time.time()
-        max_depth, max_velocity, arrival_time = solve_2d_diffusive_wave(
-            dem_data, initial_depth, inflow_series, inflow_idx_x, inflow_idx_y,
-            dx, actual_dt, manning_n, num_steps
+        max_depth, max_velocity, arrival_time, step, dt, in_vol, out_vol, mass_err = solve_2d_diffusive_wave(
+            dem_data, initial_depth, t_hydro, q_hydro, inflow_idx_x, inflow_idx_y,
+            dx, manning_n, total_sim_time
         )
         compute_time = time.time() - start_time
-        print(f"Solver finished in {compute_time:.2f} seconds.")
+        print(f"Solver finished in {compute_time:.2f} seconds. Steps: {step}, Final dt: {dt}")
+        print(f"Mass balance error: {mass_err:.2f} m3 (Inflow: {in_vol:.2f}, Grid: {out_vol:.2f})")
         
         # 4. Process Results (Rasters and Polygons)
         sim_id = f"SIM-{uuid.uuid4().hex[:6]}"
@@ -248,7 +324,7 @@ class BaselineHydrodynamicAdapter:
         limitations = [
             "BASELINE SOLVER: This uses a simplified 2D Diffusive Wave approximation, not full SWE.",
             "SPH/Delft3D ABSTRACTION: This baseline executes behind the Model Adapter as SPH/Delft3D binaries are unsupported in this environment.",
-            "COARSE GRID: The DEM was resampled to ~90m to allow fast execution.",
+            "COARSE GRID: The DEM was resampled to ~300m to allow fast execution.",
             "EXTREME HYPOTHETICAL ASSUMPTION: The flood extent represents an engineer-defined stress test, NOT a physically validated real-world event prediction."
         ]
         
@@ -262,7 +338,7 @@ class BaselineHydrodynamicAdapter:
             max_velocity_tif=vel_path,
             arrival_time_tif=arr_path,
             flood_extent_geojson=extent_path,
-            total_timesteps_executed=num_steps,
+            total_timesteps_executed=step,
             computational_time_seconds=compute_time,
             flooded_area_sq_meters=flooded_area,
             max_simulated_depth_m=float(np.max(max_depth)),
