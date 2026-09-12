@@ -47,7 +47,7 @@ def health_check(db: Session = Depends(get_db)):
         "postgis_version": postgis_status
     }
 
-@app.get("/dams", response_model=list[schemas.DamResponse])
+@app.get("/api/v1/dams", response_model=list[schemas.DamResponse])
 def get_dams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     """Fetch all dams with their geometries as GeoJSON"""
     try:
@@ -79,7 +79,7 @@ def get_dams(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
             }
         ]
 
-@app.get("/dams/{dam_id}", response_model=schemas.DamResponse)
+@app.get("/api/v1/dams/{dam_id}", response_model=schemas.DamResponse)
 def get_dam(dam_id: int, db: Session = Depends(get_db)):
     """Fetch a specific dam by ID"""
     try:
