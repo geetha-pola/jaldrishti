@@ -60,6 +60,8 @@ def test_idukki_scenario():
     # This JSON string is exactly what will be sent to the Delft3D / SPH model adapter in the future.
     json_output = scenario.model_dump_json(indent=2)
     
+    import os
+    os.makedirs("data/domain", exist_ok=True)
     with open("data/domain/idukki_scenario.json", "w") as f:
         f.write(json_output)
         

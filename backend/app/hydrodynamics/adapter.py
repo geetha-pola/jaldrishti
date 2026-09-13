@@ -415,7 +415,7 @@ class SPHAdapter(HydrodynamicModelAdapter):
         max_velocity = np.full((height, width), -9999.0, dtype=np.float32)
         arrival_time = np.full((height, width), -9999.0, dtype=np.float32)
         
-        csv_files = sorted(glob.glob(os.path.join(out_case_dir, "PartFluid_*.csv")))
+        csv_files = sorted(glob.glob(os.path.join(out_case_dir, "PartFluid_[0-9]*.csv")))
         total_steps = len(csv_files)
         sim_id = f"SIM-SPH-{uuid.uuid4().hex[:6]}"
         
