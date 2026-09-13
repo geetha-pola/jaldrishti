@@ -31,3 +31,10 @@ backend/logs/
 # IDEs
 .vscode/
 .idea/
+
+# Jaldrishti environment and outputs
+.venv/
+integration_output/
+DualSPHysics.zip
+DualSPHysics_bin/
+

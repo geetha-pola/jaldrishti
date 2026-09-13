@@ -8,7 +8,7 @@ import rasterio
 from rasterio.windows import from_bounds
 from rasterio.enums import Resampling
 from rasterio import features
-import geopandas as gpd
+from rasterio import features
 from typing import Tuple, Dict, Any, Optional
 from abc import ABC, abstractmethod
 import subprocess
@@ -266,6 +266,7 @@ class BaselineDiffusiveWaveAdapter(HydrodynamicModelAdapter):
         if polygons:
             from shapely.geometry import shape
             geom = [shape(poly) for poly in polygons]
+            import geopandas as gpd
             gdf = gpd.GeoDataFrame(geometry=geom, crs=scenario.crs)
             gdf.to_crs("EPSG:4326").to_file(extent_path, driver="GeoJSON")
             flooded_area = sum([g.area for g in geom])
