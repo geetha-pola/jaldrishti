@@ -111,13 +111,51 @@
   <section class="page" id="simulation"><div class="heading"><div><h2>Simulation Progress</h2><p>Track each stage of the on-demand run.</p></div><span class="status review" id="sim-status-badge">Processing</span></div><div class="panel"><div class="timeline" id="sim-timeline"><div class="done">Data acquisition</div><div class="active">Hydrodynamic simulation</div><div>Impact analysis</div></div><div class="progress"><span style="width:0%" id="sim-progress-bar"></span></div><div class="sim-meta"><span>Current Stage: <b id="sim-current-stage">Initializing</b></span><span>Progress <b id="sim-progress-text">0%</b></span><span>Run ID <b id="sim-id-text">-</b></span><span style="color:red" id="sim-error-text"></span></div><button class="primary" id="btn-open-results" onclick="go('results')" disabled>Open Results →</button></div></section>
   
   <!-- RESULTS -->
-  <section class="page" id="results"><div class="heading"><div><h2>Flood Inundation Results</h2><p>2D Diffusive Wave Baseline Simulation of an Extreme Hypothetical Stress-Test Scenario.</p></div><span class="status detected">Completed</span></div><div class="result-layout"><div class="map large"><div id="mapResult" style="height:400px;"></div><div class="legend"><b>Flood depth</b><span><i class="a"></i> Low</span><span><i class="b"></i> Moderate</span><span><i class="c"></i> High</span><span><i class="d"></i> Very high</span></div></div><div class="result-side"><div class="result-card"><span>Flooded area</span><b id="res-area">-</b></div><div class="result-card"><span>Maximum depth</span><b id="res-depth">-</b></div><div class="result-card"><span>Maximum velocity</span><b id="res-vel">-</b></div><div class="result-card"><span>Model-estimated flood arrival</span><b id="res-arrival">-</b></div><button class="secondary" onclick="go('impact')">Impact Analysis →</button><button class="secondary" onclick="go('validation')">Satellite Validation →</button></div></div></section>
-  
-  <section class="page" id="impact"><div class="heading"><div><h2>Flood Impact Analysis</h2><p>Identify infrastructure and population exposure within the simulated zone.</p></div></div><div class="result-layout"><div class="map large"><div id="mapImpact"></div></div><div class="result-side"><div class="grid2"><div class="result-card"><span>Nearest Affected Places</span><b id="impact-places-count">-</b></div></div><div class="layers" id="impact-places-list" style="margin-top:20px;"><b>Nearest Affected Places</b><br>Loading...</div></div></div></section>
-  
-  <section class="page" id="validation"><div class="heading"><div><h2>Satellite-Based Validation</h2><p>Compare modelled inundation with observed satellite-derived flood extent.</p></div></div><div class="validation"><div class="panel"><h3>Modelled flood</h3><div class="mini-map"><div id="mapVal1"></div></div><b id="sat-modelled-area">-</b></div><div class="panel"><h3>Sentinel-1 observed flood</h3><div class="mini-map"><div id="mapVal2"></div></div><b id="sat-observed-area">-</b></div></div><div class="panel"><div class="stats"><div><span>Agreement (IoU)</span><b id="sat-iou">-</b></div><div><span>Observed area</span><b id="sat-obs-area2">-</b></div><div><span>Difference</span><b id="sat-diff">-</b></div><div><span>Validation Status</span><b id="sat-status">-</b></div></div><p class="note" id="sat-limitations">If suitable event imagery is unavailable, the application should clearly report that validation cannot be performed for that scenario.</p></div></section>
+  <section class="page" id="results">
+    <div class="heading"><div><h2 id="title-results">Flood Inundation Results</h2><p id="subtitle-results">2D Diffusive Wave Baseline Simulation of an Extreme Hypothetical Stress-Test Scenario.</p></div><span class="status detected">Completed</span></div>
+    
+    <div class="result-layout">
+      <div class="map large"><div id="mapResult" style="height:400px;"></div><div class="legend"><b>Flood depth</b><span><i class="a"></i> Low</span><span><i class="b"></i> Moderate</span><span><i class="c"></i> High</span><span><i class="d"></i> Very high</span></div></div>
+      <div class="result-side">
+        <div class="result-card"><span>Flooded area</span><b id="res-area">-</b></div>
+        <div class="result-card"><span>Maximum depth</span><b id="res-depth">-</b></div>
+        <div class="result-card"><span>Maximum velocity</span><b id="res-vel">-</b></div>
+        <div class="result-card"><span>Model-estimated flood arrival</span><b id="res-arrival">-</b></div>
+      </div>
+    </div>
 
-<section class="page" id="export"><div class="heading"><div><h2>Export Results</h2><p>Generate standard GIS layers and reports.</p></div></div><div class="export-grid" id="export-container"><i>Run a simulation to generate export links.</i></div></section>
+    <!-- Impact Analysis Section (Merged) -->
+    <div class="heading" style="margin-top:40px;"><div><h2>Flood Impact Analysis</h2><p>Identify infrastructure and population exposure within the simulated zone.</p></div></div>
+    <div class="result-layout">
+      <!-- We removed mapImpact to avoid duplicate maps, we can just list the places -->
+      <div class="result-side" style="width: 100%;">
+        <div class="grid2">
+          <div class="result-card"><span>Nearest Affected Places</span><b id="impact-places-count">-</b></div>
+        </div>
+        <div class="layers" id="impact-places-list" style="margin-top:20px;"><b>Nearest Affected Places</b><br>Loading...</div>
+      </div>
+    </div>
+
+    <!-- Satellite Validation Section (Merged) -->
+    <div class="heading" style="margin-top:40px;"><div><h2>Satellite-Based Validation</h2><p>Compare modelled inundation with observed satellite-derived flood extent.</p></div></div>
+    <div class="validation">
+      <div class="panel"><h3>Modelled flood</h3><b id="sat-modelled-area">-</b></div>
+      <div class="panel"><h3>Sentinel-1 observed flood</h3><b id="sat-observed-area">-</b></div>
+    </div>
+    <div class="panel">
+      <div class="stats">
+        <div><span>Agreement (IoU)</span><b id="sat-iou">-</b></div>
+        <div><span>Observed area</span><b id="sat-obs-area2">-</b></div>
+        <div><span>Difference</span><b id="sat-diff">-</b></div>
+        <div><span>Validation Status</span><b id="sat-status">-</b></div>
+      </div>
+      <p class="note" id="sat-limitations">If suitable event imagery is unavailable, the application should clearly report that validation cannot be performed for that scenario.</p>
+    </div>
+
+    <!-- Export Section (Merged) -->
+    <div class="heading" style="margin-top:40px;"><div><h2>Export Results</h2><p>Generate standard GIS layers and reports.</p></div></div>
+    <div class="export-grid" id="export-container" style="margin-bottom:60px;"><i>Run a simulation to generate export links.</i></div>
+  </section>
 
 <section class="page" id="history"><div class="heading"><div><h2>Simulation History</h2><p>Previous on-demand analyses.</p></div></div><div class="panel"><table><tr><th>ID</th><th>Hazard</th><th>Location</th><th>Scenario</th><th>Model</th><th>Date</th><th>Status</th></tr><tr><td>SIM-025</td><td>Dam Break</td><td>Example Reservoir</td><td>Moderate</td><td>SPH</td><td>08 Sep 2026</td><td><em class="ok">Completed</em></td></tr><tr><td>SIM-024</td><td>GLOF</td><td>Example Lake</td><td>Severe</td><td>Delft3D</td><td>07 Sep 2026</td><td><em class="ok">Completed</em></td></tr></table></div></section>
 

@@ -30,7 +30,7 @@ class SimulationRequest(BaseModel):
     lake_id: Optional[str] = None
     scenario_id: Optional[str] = None
     event_date: Optional[str] = None
-    model_type: Optional[str] = "BASELINE_DIFFUSIVE_WAVE"
+    model_type: Optional[str] = "DELFT3D"
 
 class SimulationResponse(BaseModel):
     simulation_id: str

@@ -2,13 +2,21 @@ const API_BASE_URL = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL) ? CO
 
 const titles={dashboard:'Flood Inundation Dashboard','glof-select':'GLOF — Select Lake','glof-character':'GLOF — Lake Characterization','glof-trigger':'GLOF — Trigger Assessment','glof-scenario':'GLOF — Outburst Scenario','dam-select':'Dam Break — Select Dam','dam-condition':'Dam Break — Reservoir Condition','dam-breach':'Dam Break — Breach Scenario',data:'Data Acquisition',preprocess:'Automatic Data Preprocessing',domain:'Simulation Domain',scenario:'Scenario Generator',model:'Hydrodynamic Model Adapter',simulation:'Simulation Progress',results:'Flood Inundation Results',propagation:'Flood Propagation Timeline',compare:'Scenario Comparison',impact:'Flood Impact Analysis',validation:'Satellite-Based Validation',export:'Export Results',history:'Simulation History',architecture:'JALDRISHTI System Architecture',stack:'Technology Stack',about:'About JALDRISHTI'};
 
-function go(id){
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    const el=document.getElementById(id);
-    if(el)el.classList.add('active');
-    document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.page===id));
-    document.getElementById('title').textContent=titles[id]||'JALDRISHTI';
-    window.scrollTo(0,0);
+function go(id) {
+    if (['impact', 'validation', 'export'].includes(id)) {
+        id = 'results';
+    }
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+    document.querySelectorAll('.nav').forEach(n => n.classList.toggle('active', n.dataset.page === id));
+    document.getElementById('title').textContent = titles[id] || 'JALDRISHTI';
+    window.scrollTo(0, 0);
+    if (id === 'results' && window.resultMap) {
+        setTimeout(() => {
+            window.resultMap.invalidateSize();
+        }, 100);
+    }
 }
 
 document.querySelectorAll('.nav').forEach(n=>n.onclick=()=>go(n.dataset.page));
@@ -100,7 +108,8 @@ window.startSimulation = async function() {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 hazard_type: "DAM_BREAK",
-                dam_id: selectedDamId.toString()
+                dam_id: selectedDamId.toString(),
+                model_type: "DUAL"
             })
         });
         
@@ -129,6 +138,10 @@ async function pollSimulation(simId) {
             document.getElementById('sim-status-badge').textContent = 'Completed';
             document.getElementById('sim-status-badge').className = 'status detected';
             document.getElementById('btn-open-results').disabled = false;
+            if (data.actual_model) {
+                const sub = document.getElementById('subtitle-results');
+                if (sub) sub.textContent = `${data.actual_model} Simulation of ${data.config.hazard_type} Scenario.`;
+            }
             fetchResults(simId);
         } else if (data.status === 'FAILED') {
             document.getElementById('sim-status-badge').textContent = 'Failed';
@@ -154,6 +167,23 @@ async function fetchResults(simId) {
             }
             if (resultsData.max_velocity_mps) {
                 document.getElementById('res-vel').textContent = `${resultsData.max_velocity_mps.toFixed(2)} m/s`;
+            }
+            
+            // Populate comparison panel if available
+            if (window.lastSimulationData && window.lastSimulationData.config.model_type === "DUAL") {
+                document.getElementById('dual-comparison-panel').style.display = 'block';
+                const comp = window.lastSimulationData.results.comparison_summary;
+                if (comp && !comp.error) {
+                    document.getElementById('comp-sph-area').textContent = `${(comp.sph.flooded_area_sq_meters / 1e6).toFixed(2)} sq km`;
+                    document.getElementById('comp-sph-depth').textContent = `${comp.sph.max_depth_m.toFixed(2)} m`;
+                    document.getElementById('comp-sph-vel').textContent = `${comp.sph.max_velocity_mps.toFixed(2)} m/s`;
+                    
+                    document.getElementById('comp-d3d-area').textContent = `${(comp.delft3d.flooded_area_sq_meters / 1e6).toFixed(2)} sq km`;
+                    document.getElementById('comp-d3d-depth').textContent = `${comp.delft3d.max_depth_m.toFixed(2)} m`;
+                    document.getElementById('comp-d3d-vel').textContent = `${comp.delft3d.max_velocity_mps.toFixed(2)} m/s`;
+                    
+                    document.getElementById('comp-iou').textContent = `${comp.iou.toFixed(1)} %`;
+                }
             }
         }
         
@@ -229,6 +259,7 @@ function initLeafletMap(simId) {
     el.innerHTML = ""; // clear mock
     
     const map = L.map('mapResult').setView([9.84, 76.97], 11);
+    window.resultMap = map;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'
     }).addTo(map);
@@ -248,7 +279,7 @@ function initLeafletMap(simId) {
 
 // Init
 window.addEventListener('DOMContentLoaded', loadDams);
-let selectedModelId = 'BASELINE_DIFFUSIVE_WAVE';
+let selectedModelId = 'DELFT3D';
 
 async function fetchModels() {
     try {

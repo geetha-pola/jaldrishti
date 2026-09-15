@@ -14,3 +14,8 @@ pystac-client==0.9.0
 scipy==1.17.1
 pytest==9.1.1
 httpx==0.27.2
+
+alembic==1.13.1
+psycopg==3.1.18
+
+psycopg-binary==3.3.5

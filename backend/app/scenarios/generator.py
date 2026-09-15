@@ -28,7 +28,7 @@ class ScenarioGenerator:
         initial_storage_mcm: ParameterValue,
         dam_height_m: ParameterValue,
         # Default scenario simulation configs
-        sim_duration_hours: float = 24.0,
+        sim_duration_hours: float = 1.0,
         timestep_seconds: float = 1.0,
         manning_n: float = 0.04
     ) -> StandardizedModelInput:

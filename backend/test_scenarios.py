@@ -23,7 +23,7 @@ def test_idukki_scenario():
         dam_name="Idukki",
         lat=9.8433,
         lon=76.9763,
-        dem_path="data/domain/projected_dem.tif",
+        dem_path="data/domain/idukki_small_utm.tif",
         crs="EPSG:32643",
         domain_geojson="data/domain/simulation_domain.geojson",
         domain_bounds_utm=(607585.5, 993037.3, 721814.0, 1108092.4),
