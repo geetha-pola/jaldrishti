@@ -44,6 +44,8 @@ class SimulationStatusResponse(BaseModel):
     error: Optional[str] = None
     requested_model: Optional[str] = None
     actual_model: Optional[str] = None
+    config: Optional[dict] = None
+    results: Optional[dict] = None
 
 class SimulationResultsResponse(BaseModel):
     simulation_id: str

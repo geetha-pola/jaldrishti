@@ -124,7 +124,32 @@
       </div>
     </div>
 
-    <!-- Impact Analysis Section (Merged) -->
+    </section>
+  <section class="page" id="propagation">
+      <div class="heading" style="margin-top:40px;"><div><h2>Flood Propagation</h2><p>Temporal evaluation of flood wave propagation.</p></div></div>
+      <div class="panel" style="text-align: center; padding: 40px;">
+          <h3 style="color: #666; font-weight: normal; margin-bottom: 10px;">Propagation timeline is not available for this simulation.</h3>
+          <p style="color: #888;">Available result: final modeled inundation extent and maximum flood metrics.</p>
+      </div>
+  </section>
+
+  <section class="page" id="compare">
+      <div class="heading" style="margin-top:40px;"><div><h2>Compare Scenarios</h2><p>Evaluate outputs from different hydrodynamic models.</p></div></div>
+      <div class="validation">
+        <div class="panel" id="dual-comparison-panel" style="display:none; margin-bottom: 20px;">
+          <h3>Scenario Comparison (SPH vs Delft3D)</h3>
+          <div class="result-card"><span>SPH Flooded Area</span><b id="comp-sph-area">-</b></div>
+          <div class="result-card"><span>SPH Max Depth</span><b id="comp-sph-depth">-</b></div>
+          <div class="result-card"><span>SPH Max Velocity</span><b id="comp-sph-vel">-</b></div>
+          <div class="result-card"><span>Delft3D Flooded Area</span><b id="comp-d3d-area">-</b></div>
+          <div class="result-card"><span>Delft3D Max Depth</span><b id="comp-d3d-depth">-</b></div>
+          <div class="result-card"><span>Delft3D Max Velocity</span><b id="comp-d3d-vel">-</b></div>
+          <div class="result-card"><span>Agreement (IoU)</span><b id="comp-iou">-</b></div>
+        </div>
+      </div>
+  </section>
+
+  <section class="page" id="impact">
     <div class="heading" style="margin-top:40px;"><div><h2>Flood Impact Analysis</h2><p>Identify infrastructure and population exposure within the simulated zone.</p></div></div>
     <div class="result-layout">
       <!-- We removed mapImpact to avoid duplicate maps, we can just list the places -->
@@ -136,7 +161,8 @@
       </div>
     </div>
 
-    <!-- Satellite Validation Section (Merged) -->
+    </section>
+  <section class="page" id="validation">
     <div class="heading" style="margin-top:40px;"><div><h2>Satellite-Based Validation</h2><p>Compare modelled inundation with observed satellite-derived flood extent.</p></div></div>
     <div class="validation">
       <div class="panel"><h3>Modelled flood</h3><b id="sat-modelled-area">-</b></div>
@@ -152,7 +178,8 @@
       <p class="note" id="sat-limitations">If suitable event imagery is unavailable, the application should clearly report that validation cannot be performed for that scenario.</p>
     </div>
 
-    <!-- Export Section (Merged) -->
+    </section>
+  <section class="page" id="export">
     <div class="heading" style="margin-top:40px;"><div><h2>Export Results</h2><p>Generate standard GIS layers and reports.</p></div></div>
     <div class="export-grid" id="export-container" style="margin-bottom:60px;"><i>Run a simulation to generate export links.</i></div>
   </section>

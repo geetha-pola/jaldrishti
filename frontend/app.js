@@ -3,9 +3,7 @@ const API_BASE_URL = (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL) ? CO
 const titles={dashboard:'Flood Inundation Dashboard','glof-select':'GLOF — Select Lake','glof-character':'GLOF — Lake Characterization','glof-trigger':'GLOF — Trigger Assessment','glof-scenario':'GLOF — Outburst Scenario','dam-select':'Dam Break — Select Dam','dam-condition':'Dam Break — Reservoir Condition','dam-breach':'Dam Break — Breach Scenario',data:'Data Acquisition',preprocess:'Automatic Data Preprocessing',domain:'Simulation Domain',scenario:'Scenario Generator',model:'Hydrodynamic Model Adapter',simulation:'Simulation Progress',results:'Flood Inundation Results',propagation:'Flood Propagation Timeline',compare:'Scenario Comparison',impact:'Flood Impact Analysis',validation:'Satellite-Based Validation',export:'Export Results',history:'Simulation History',architecture:'JALDRISHTI System Architecture',stack:'Technology Stack',about:'About JALDRISHTI'};
 
 function go(id) {
-    if (['impact', 'validation', 'export'].includes(id)) {
-        id = 'results';
-    }
+    
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     const el = document.getElementById(id);
     if (el) el.classList.add('active');
@@ -134,13 +132,19 @@ async function pollSimulation(simId) {
         document.getElementById('sim-progress-text').textContent = `${progress}%`;
         document.getElementById('sim-progress-bar').style.width = `${progress}%`;
         
-        if (data.status === 'COMPLETED') {
+                if (data.status === 'COMPLETED') {
+            window.lastSimulationData = data;
             document.getElementById('sim-status-badge').textContent = 'Completed';
             document.getElementById('sim-status-badge').className = 'status detected';
             document.getElementById('btn-open-results').disabled = false;
-            if (data.actual_model) {
-                const sub = document.getElementById('subtitle-results');
-                if (sub) sub.textContent = `${data.actual_model} Simulation of ${data.config.hazard_type} Scenario.`;
+            
+            const sub = document.getElementById('subtitle-results');
+            if (sub) {
+                let modelLabel = data.actual_model || data.requested_model || 'Hydrodynamic';
+                if (data.actual_model === "DUAL") {
+                    modelLabel = "Delft3D FM - Real Simulation";
+                }
+                sub.textContent = `${modelLabel} of ${data.config ? data.config.hazard_type : "DAM_BREAK"} Scenario.`;
             }
             fetchResults(simId);
         } else if (data.status === 'FAILED') {
@@ -164,9 +168,22 @@ async function fetchResults(simId) {
             const resultsData = await resultsResp.json();
             if (resultsData.max_depth_m) {
                 document.getElementById('res-depth').textContent = `${resultsData.max_depth_m.toFixed(2)} m`;
+            } else {
+                document.getElementById('res-depth').textContent = `Not available`;
             }
             if (resultsData.max_velocity_mps) {
                 document.getElementById('res-vel').textContent = `${resultsData.max_velocity_mps.toFixed(2)} m/s`;
+            } else {
+                document.getElementById('res-vel').textContent = `Not available`;
+            }
+            
+            // If DUAL, override with Delft3D metrics
+            if (window.lastSimulationData && window.lastSimulationData.config && window.lastSimulationData.config.model_type === "DUAL") {
+                const comp = window.lastSimulationData.results && window.lastSimulationData.results.comparison_summary;
+                if (comp && comp.delft3d) {
+                    document.getElementById('res-depth').textContent = `${comp.delft3d.max_depth_m.toFixed(2)} m`;
+                    document.getElementById('res-vel').textContent = `${comp.delft3d.max_velocity_mps.toFixed(2)} m/s`;
+                }
             }
             
             // Populate comparison panel if available
@@ -261,20 +278,27 @@ function initLeafletMap(simId) {
     const map = L.map('mapResult').setView([9.84, 76.97], 11);
     window.resultMap = map;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
+        attribution: 'OpenStreetMap'
     }).addTo(map);
     
     fetch(`${API_BASE_URL}/simulations/${simId}/geojson`)
         .then(r => r.json())
         .then(data => {
-            const layer = L.geoJSON(data, {
-                style: function (feature) {
-                    return {color: "#0066cc", weight: 1, fillOpacity: 0.5};
-                }
-            }).addTo(map);
-            map.fitBounds(layer.getBounds());
+            if (data && data.features && data.features.length > 0) {
+                const layer = L.geoJSON(data, {
+                    style: function (feature) {
+                        return {color: "#0066cc", weight: 1, fillOpacity: 0.5};
+                    }
+                }).addTo(map);
+                map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+            } else {
+                el.innerHTML = "<div style='padding: 20px; text-align: center; color: #666;'>No flood extent geometry available for this simulation.</div>";
+            }
         })
-        .catch(e => console.error("GeoJSON error:", e));
+        .catch(e => {
+            console.error("GeoJSON error:", e);
+            el.innerHTML = "<div style='padding: 20px; text-align: center; color: #666;'>Error loading flood extent geometry.</div>";
+        });
 }
 
 // Init

@@ -765,6 +765,10 @@ OutputDir = output
             
         print(f"DEBUG: Running Delft3D: {cmd}", flush=True)
         start_time = time.time()
+        
+        # Configurable timeout
+        timeout_seconds = int(os.environ.get("DELFT3D_TIMEOUT_SECONDS", 900))
+        
         try:
             result = subprocess.run(
                 cmd,
@@ -773,7 +777,7 @@ OutputDir = output
                 text=True,
                 check=True,
                 env=env,
-                timeout=300
+                timeout=timeout_seconds
             )
         except subprocess.CalledProcessError as e:
             print("DFM Error!")

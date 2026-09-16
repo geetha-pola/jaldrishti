@@ -182,15 +182,7 @@ def get_simulation_status(sim_id: str):
     if not state:
         raise HTTPException(status_code=404, detail="Simulation not found")
         
-    return {
-        "simulation_id": state["simulation_id"],
-        "status": state["status"],
-        "current_stage": state.get("current_stage"),
-        "progress": state.get("progress"),
-        "error": state.get("error"),
-        "requested_model": state.get("requested_model"),
-        "actual_model": state.get("actual_model")
-    }
+    return state
 
 @app.get("/api/v1/simulations/{sim_id}/results", response_model=schemas.SimulationResultsResponse)
 def get_simulation_results(sim_id: str):
