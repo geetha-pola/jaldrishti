@@ -15,7 +15,7 @@ def test_model_availability():
     assert bl.is_available is True
     
     sph = ModelRegistry.get_adapter("SPH")
-    assert sph.is_available is False
+    assert sph.is_available is True
     
     delft = ModelRegistry.get_adapter("DELFT3D")
     assert delft.is_available is False

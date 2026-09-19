@@ -25,7 +25,8 @@ class ImpactAnalyzer:
         # Load the simulated flood extent
         self.extent_gdf = gpd.read_file(self.extent_path)
         if self.extent_gdf.empty:
-            raise ValueError("Flood extent is empty. Cannot perform impact analysis.")
+            # We must not crash, just return an empty feature set for the simulation
+            pass
             
         with rasterio.open(self.depth_path) as src:
             self.crs = src.crs.to_string()

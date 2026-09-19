@@ -72,7 +72,9 @@ class Simulation(Base):
     satellite_validation_path = Column(String, nullable=True)
     export_package_path = Column(String, nullable=True)
     
+    result_metadata = Column(JSON, nullable=True)
     error_information = Column(String, nullable=True)
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
