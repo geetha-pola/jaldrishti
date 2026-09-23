@@ -8,7 +8,20 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
+<section id="login-screen" style="display: flex; align-items: center; justify-content: center; height: 100vh; background: #f8fafc; font-family: sans-serif;">
+  <div class="panel" style="width: 100%; max-width: 400px; text-align: center; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+    <div class="brand" style="display: flex; align-items: center; justify-content: center; margin-bottom: 30px; gap: 10px;">
+      <div class="logo" style="background: #0066cc; color: white; width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px;">J</div>
+      <div style="text-align: left; line-height: 1.2;"><b>JALDRISHTI</b><br><small style="color: #666;">Flood Decision Support</small></div>
+    </div>
+    <form onsubmit="event.preventDefault(); document.getElementById('login-screen').style.display='none'; document.getElementById('main-app').style.display='block';">
+      <input type="text" placeholder="Username" style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;" required>
+      <input type="password" placeholder="Password" style="width: 100%; padding: 12px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;" required>
+      <button type="submit" class="primary" style="width: 100%; padding: 12px; border: none; background: #0066cc; color: white; border-radius: 4px; font-weight: bold; cursor: pointer;">Login</button>
+    </form>
+  </div>
+</section>
+<div class="app" id="main-app" style="display: none;">
 <aside class="sidebar">
   <div class="brand"><div class="logo">J</div><div><b>JALDRISHTI</b><small>Flood Decision Support</small></div></div>
   <nav>
