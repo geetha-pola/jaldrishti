@@ -32,7 +32,7 @@ def test_hydrograph_conservation_of_volume():
     base_seconds = hydrograph[2].time_seconds
     integrated_volume = 0.5 * base_seconds * q_peak
     
-    assert pytest.approx(integrated_volume) == vol
+    assert abs(integrated_volume - vol) < 1e-3
 
 def test_froehlich_equations():
     """Test the empirical Froehlich 1995 equations."""
@@ -43,7 +43,7 @@ def test_froehlich_equations():
     
     # Froehlich peak = 0.607 * (1996300000^0.295) * (168.91^1.24)
     expected_peak = 0.607 * (vol ** 0.295) * (head ** 1.24)
-    assert pytest.approx(q_peak) == expected_peak
+    assert abs(q_peak - expected_peak) < 1e-3
     assert t_f > 0
 
 def test_provenance_enum():

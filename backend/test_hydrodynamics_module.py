@@ -26,7 +26,7 @@ def test_scenario_input_validity():
         avg_q = (inflow[i].discharge_cms + inflow[i-1].discharge_cms) / 2.0
         vol += avg_q * dt
         
-    assert pytest.approx(vol, rel=1e-3) == scenario.breach_parameters.initial_storage_volume.value
+    assert abs(vol - scenario.breach_parameters.initial_storage_volume.value) < 1e-3
 
 def test_result_consistency():
     """Test solver outputs for physically impossible values and dimension matches."""

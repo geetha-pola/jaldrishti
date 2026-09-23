@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -10,7 +11,13 @@ Base = declarative_base()
 
 # Dependency
 def get_db():
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+        # Just to trigger connection exception if it's dead
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        yield None
+        return
     try:
         yield db
     finally:

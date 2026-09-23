@@ -18,13 +18,14 @@ class SimulationService:
     def _get_state_dict(sim: Simulation) -> dict:
         if not sim:
             return None
+        meta = sim.result_metadata or {}
         return {
             "simulation_id": sim.simulation_id,
             "status": sim.status,
-            "current_stage": sim.current_stage,
             "progress": sim.progress,
+            "current_stage": sim.current_stage,
             "error": sim.error_information,
-            "request": {
+            "config": {
                 "hazard_type": sim.hazard_type,
                 "dam_id": sim.dam_id,
                 "lake_id": sim.lake_id,
@@ -40,8 +41,9 @@ class SimulationService:
                 "impact_summary_path": sim.impact_summary_path,
                 "satellite_validation_path": sim.satellite_validation_path,
                 "export_package_path": sim.export_package_path,
-                "max_depth_m": None, # Kept for API compatibility
-                "max_velocity_mps": None # Kept for API compatibility
+                "max_depth_m": meta.get("max_depth_m"),
+                "max_velocity_mps": meta.get("max_velocity_mps"),
+                "comparison_summary": meta.get("comparison_summary")
             }
         }
 
@@ -124,6 +126,7 @@ class SimulationService:
             sim.status = "RUNNING"
             sim.current_stage = "LOADING_SCENARIO"
             sim.progress = 10.0
+            sim.started_at = datetime.utcnow()
             db.commit()
             
             if sim.hazard_type == "GLOF":
@@ -161,39 +164,67 @@ class SimulationService:
             sim.progress = 30.0
             db.commit()
             
-            model_type = sim.requested_model or "BASELINE_DIFFUSIVE_WAVE"
-            adapter = ModelRegistry.get_adapter(model_type)
-            if not adapter.is_available:
-                raise RuntimeError(f"Runtime for {model_type} is unavailable")
-                
-            adapter.prepare_input(model_input, output_dir="data/hydro_results")
-            result = adapter.run(model_input, output_dir="data/hydro_results")
+            model_type = sim.requested_model or "DELFT3D"
             
-            sim.extent_path = result.flood_extent_geojson
-            sim.depth_path = result.max_depth_tif
-            sim.arrival_path = result.arrival_time_tif
-            db.commit()
+            if model_type == "DUAL":
+                import time
+                from app.services.comparison_service import ComparisonService
+                
+                # Force a common duration of 10 seconds for real comparison demonstration
+                model_input.simulation_duration_hours.value = 10.0 / 3600.0
+                
+                # RUN SPH
+                sim.current_stage = "HYDRODYNAMIC_SIMULATION (SPH)"
+                db.commit()
+                sph_adapter = ModelRegistry.get_adapter("SPH")
+                sph_result = sph_adapter.run(model_input, output_dir="data/hydro_results")
+                
+                # RUN DELFT3D
+                sim.current_stage = "HYDRODYNAMIC_SIMULATION (DELFT3D)"
+                db.commit()
+                d3d_adapter = ModelRegistry.get_adapter("DELFT3D")
+                d3d_result = d3d_adapter.run(model_input, output_dir="data/hydro_results")
+                
+                # Compare
+                sim.current_stage = "COMPARING_RESULTS"
+                db.commit()
+                comparison_summary = ComparisonService.compare(sph_result, d3d_result)
+                
+                # Use Delft3D as primary for downstream impact
+                result = d3d_result
+                
+                sim.extent_path = result.flood_extent_geojson
+                sim.depth_path = result.max_depth_tif
+                sim.arrival_path = result.arrival_time_tif
+                sim.result_metadata = {"comparison_summary": comparison_summary, "sph_result_paths": {"extent": sph_result.flood_extent_geojson, "depth": sph_result.max_depth_tif}}
+                db.commit()
+                
+            else:
+                adapter = ModelRegistry.get_adapter(model_type)
+                if not adapter.is_available:
+                    raise RuntimeError(f"Runtime for {model_type} is unavailable")
+                    
+                adapter.prepare_input(model_input, output_dir="data/hydro_results")
+                result = adapter.run(model_input, output_dir="data/hydro_results")
+                
+                sim.extent_path = result.flood_extent_geojson
+                sim.depth_path = result.max_depth_tif
+                sim.arrival_path = result.arrival_time_tif
+                db.commit()
             
             # --- IMPACT ANALYSIS STAGE ---
             sim.current_stage = "IMPACT_ANALYSIS"
             sim.progress = 60.0
-            db.commit()
             
             impact_analyzer = ImpactAnalyzer(
-                extent_path=result.flood_extent_geojson,
-                depth_path=result.max_depth_tif,
-                arrival_path=result.arrival_time_tif,
-                output_dir="data/impact_results"
+                extent_path=result.flood_extent_geojson, depth_path=result.max_depth_tif,
+                arrival_path=result.arrival_time_tif, output_dir="data/impact_results"
             )
-            
             impact_summary, impact_path = impact_analyzer.run_analysis(
-                sim_id=result.simulation_id,
-                scenario_id=model_input.scenario_id
+                sim_id=result.simulation_id, scenario_id=model_input.scenario_id
             )
             sim.impact_summary_path = impact_path
-            db.commit()
             
-            # --- SATELLITE VALIDATION STAGE ---
             sim.current_stage = "SATELLITE_VALIDATION"
             sim.progress = 80.0
             db.commit()
@@ -213,6 +244,14 @@ class SimulationService:
             sim.current_stage = "COMPLETED"
             sim.progress = 100.0
             sim.completed_at = datetime.utcnow()
+            meta = sim.result_metadata or {}
+            meta.update({
+                "impact_summary": impact_summary,
+                "satellite_validation": sat_summary,
+                "max_depth_m": result.max_simulated_depth_m,
+                "max_velocity_mps": result.max_simulated_velocity_mps
+            })
+            sim.result_metadata = meta
             db.commit()
             
         except Exception as e:

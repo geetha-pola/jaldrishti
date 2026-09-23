@@ -1,3 +1,13 @@
+import os
+# --- GIS ENVIRONMENT FIX ---
+# PostgreSQL/PostGIS installer globally sets PROJ_LIB which conflicts with Python's rasterio/geopandas.
+# We unset it here so that rasterio/pyproj use their bundled PROJ databases.
+if "PROJ_LIB" in os.environ:
+    del os.environ["PROJ_LIB"]
+if "PROJ_DATA" in os.environ:
+    del os.environ["PROJ_DATA"]
+# ---------------------------
+
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -174,7 +184,8 @@ def create_simulation(req: schemas.SimulationRequest, background_tasks: Backgrou
 
 def _get_simulation_state(sim_id: str):
     try:
-        return _get_simulation_state(sim_id)
+        from app.services.simulation_service import SimulationService
+        return SimulationService.get_state(sim_id)
     except Exception as e:
         logger.error(f"Database error while fetching simulation state: {e}")
         raise HTTPException(status_code=503, detail="Database unavailable")
@@ -185,15 +196,7 @@ def get_simulation_status(sim_id: str):
     if not state:
         raise HTTPException(status_code=404, detail="Simulation not found")
         
-    return {
-        "simulation_id": state["simulation_id"],
-        "status": state["status"],
-        "current_stage": state.get("current_stage"),
-        "progress": state.get("progress"),
-        "error": state.get("error"),
-        "requested_model": state.get("requested_model"),
-        "actual_model": state.get("actual_model")
-    }
+    return state
 
 @app.get("/api/v1/simulations/{sim_id}/results", response_model=schemas.SimulationResultsResponse)
 def get_simulation_results(sim_id: str):
