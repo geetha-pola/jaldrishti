@@ -1,4 +1,4 @@
 // Configuration for JALDRISHTI Frontend
 const CONFIG = {
-    API_BASE_URL: '[MY_RENDER_URL]/api/v1'
+    API_BASE_URL: 'https://jaldrishti-1-q3d8.onrender.com/api/v1'
 };
