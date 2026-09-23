@@ -73,3 +73,26 @@ class GlacialLakeBase(BaseModel):
 class GlacialLakeResponse(GlacialLakeBase):
     id: str
     geojson: Any
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+

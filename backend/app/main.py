@@ -11,12 +11,22 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Try to create all database tables
+# Try to run alembic migrations
 try:
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created successfully.")
+    import alembic.config
+    import alembic.command
+    import os
+    alembic_ini_path = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
+    alembic_cfg = alembic.config.Config(alembic_ini_path)
+    alembic.command.upgrade(alembic_cfg, "head")
+    logger.info("Database migrations applied successfully.")
 except Exception as e:
-    logger.warning(f"Could not connect to the database to create tables: {e}")
+    logger.warning(f"Could not apply migrations: {e}")
+    # Fallback
+    try:
+        Base.metadata.create_all(bind=engine)
+    except:
+        pass
 
 app = FastAPI(title="JALDRISHTI API", version="1.0.0")
 
@@ -339,3 +349,7 @@ def export_package(sim_id: str):
     if not state or state['status'] != 'COMPLETED': raise HTTPException(status_code=404, detail='Not found')
     pkg_path = export_full_package(state)
     return FileResponse(pkg_path, media_type='application/zip', filename=f'JALDRISHTI_{sim_id}.zip')
+
+from app.auth import router as auth_router
+app.include_router(auth_router)
+

@@ -248,6 +248,98 @@ function initLeafletMap(simId) {
 
 // Init
 window.addEventListener('DOMContentLoaded', loadDams);
+
+// Authentication Logic
+window.doLogin = async function() {
+    const user = document.getElementById('login-username').value;
+    const pass = document.getElementById('login-password').value;
+    
+    try {
+        const response = await fetch(API_BASE_URL + '/auth/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: user, password: pass})
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            sessionStorage.setItem('access_token', data.access_token);
+            await checkAuth();
+        } else {
+            const err = await response.json();
+            alert('Login failed: ' + (err.detail || 'Invalid credentials'));
+        }
+    } catch(e) {
+        console.error(e);
+        alert('Network error during login.');
+    }
+}
+
+window.doSignup = async function() {
+    const user = document.getElementById('signup-username').value;
+    const email = document.getElementById('signup-email').value;
+    const pass = document.getElementById('signup-password').value;
+    
+    try {
+        const response = await fetch(API_BASE_URL + '/auth/signup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: user, email: email, password: pass})
+        });
+        
+        if (response.ok) {
+            alert('Account created successfully! Please login.');
+            document.getElementById('signup-form-container').style.display='none';
+            document.getElementById('login-form-container').style.display='block';
+        } else {
+            const err = await response.json();
+            alert('Signup failed: ' + (err.detail || 'Unknown error'));
+        }
+    } catch(e) {
+        console.error(e);
+        alert('Network error during signup.');
+    }
+}
+
+window.doLogout = function() {
+    sessionStorage.removeItem('access_token');
+    document.getElementById('main-app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('login-password').value = '';
+}
+
+async function checkAuth() {
+    const token = sessionStorage.getItem('access_token');
+    if (!token) {
+        document.getElementById('main-app').style.display = 'none';
+        document.getElementById('login-screen').style.display = 'flex';
+        return;
+    }
+    
+    try {
+        const response = await fetch(API_BASE_URL + '/auth/me', {
+            headers: {'Authorization': 'Bearer ' + token}
+        });
+        if (response.ok) {
+            const user = await response.json();
+            document.getElementById('auth-username').textContent = user.username;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-app').style.display = 'block';
+            go('dashboard');
+        } else {
+            window.doLogout();
+        }
+    } catch(e) {
+        console.error(e);
+        window.doLogout();
+    }
+}
+
+// Check auth on load instead of loading data blindly
+window.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+});
+
 let selectedModelId = 'BASELINE_DIFFUSIVE_WAVE';
 
 async function fetchModels() {
